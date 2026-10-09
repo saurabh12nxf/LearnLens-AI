@@ -1,98 +1,74 @@
-# LearnLens AI — Personalized Learning & Learner Analytics System
+# LearnLens AI - Personalized Learning & Learner Analytics System
 
-## 📌 Project Overview
+� **A 2-month implementation project for building an AI-powered personalized learning system**
 
-**LearnLens AI** is a data-driven personalized learning system designed to help students understand their learning material and make better study decisions using their study resources and learning history.
+## Overview
 
-The system combines **Advanced Data Science, Machine Learning, Deep Learning, Information Retrieval, Recommendation Systems, and Generative AI** to:
+LearnLens AI transforms scattered study material and quiz history into one grounded, personalized learning experience - powered by RAG, learner analytics, and recommendation systems.
 
-- Retrieve relevant information from learning resources.
-- Provide source-grounded answers using RAG.
-- Analyze student learning and assessment data.
-- Identify knowledge gaps and weak topics.
-- Recommend personalized topics and practice activities.
-- Generate personalized explanations, quizzes, and basic study/revision plans.
+### Key Features
 
----
+- **RAG-Based Learning Assistance**: Upload documents and ask questions with context-aware answers
+- **Learner Performance Analysis**: Track quiz scores, identify weak topics, and analyze learning patterns  
+- **Personalized Recommendations**: Get customized study plans, practice activities, and topic suggestions
+- **Knowledge Gap Detection**: Automatically identify areas that need more focus
+- **Analytics Dashboard**: Visualize learning progress and performance insights
 
-## 🎯 Problem Statement
+## Quick Start
 
-Students often have difficulty identifying which concepts they understand well and which concepts require more practice.
+1. **Set up environment** (Day 1-2)
+2. **Implement basic RAG system** (Day 3-4) 
+3. **Add database and API** (Week 2)
+4. **Build analytics and recommendations** (Week 3-4)
+5. **Create frontend and polish** (Week 5-8)
 
-At the same time, large study resources can make it difficult to quickly find the information relevant to a particular question or topic.
+👉 **Start immediately with [LEARNLENS_IMPLEMENTATION_PLAN.md](LEARNLENS_IMPLEMENTATION_PLAN.md)**
 
-Traditional learning systems often provide the same resources and assessments to every student without considering their individual performance and learning history.
+## Implementation Plan
 
-**LearnLens AI** aims to solve this problem using a data-driven approach that analyzes learning resources and learner data to provide personalized learning support.
+📋 **[LEARNLENS_IMPLEMENTATION_PLAN.md](LEARNLENS_IMPLEMENTATION_PLAN.md)** - Your complete 8-week execution roadmap
 
----
+This single document contains:
+- Complete 8-week timeline with daily tasks
+- Technical implementation details
+- Code examples and architecture
+- Data collection strategy
+- Testing and evaluation framework
+- Troubleshooting guide
+- Success metrics and checkpoints
 
-## 🎯 Project Goals
+## Technology Stack
 
-The main goals of LearnLens AI are to:
+**Backend**: FastAPI, PostgreSQL + pgvector, OpenAI API, Sentence Transformers  
+**Frontend**: React + TypeScript, Tailwind CSS  
+**AI/ML**: RAG pipeline, scikit-learn, embedding models  
+**Data**: PDF processing, vector search, performance analytics
 
-1. Analyze student learning and assessment data.
-2. Identify weak topics and knowledge gaps.
-3. Retrieve relevant information from learning resources.
-4. Provide grounded answers based on available study material.
-5. Recommend topics and practice activities based on learner needs.
-6. Provide personalized explanations and quizzes.
-7. Generate basic personalized study and revision plans.
-8. Evaluate the effectiveness of retrieval, analysis, and recommendation approaches.
+## Project Timeline
 
----
+- **Week 1-2**: Foundation & RAG system
+- **Week 3-4**: Analytics & performance tracking  
+- **Week 5-6**: Recommendation engine
+- **Week 7**: Frontend integration
+- **Week 8**: Testing, deployment & polish
 
-## 👥 Target Users
+## Success Criteria
 
-- College and university students
-- Technical learners
-- Self-learners
-- Online learners
+✅ Students can upload learning resources and ask questions  
+✅ System provides grounded answers from their materials  
+✅ Quiz performance is tracked and analyzed by topic  
+✅ Weak areas are automatically identified  
+✅ Personalized study recommendations are generated  
+✅ Working web interface with all features integrated
 
----
+## Getting Started
 
-## 🚀 Core Features
-
-### 1. Learning Resource Processing
-
-The system allows learning resources to be processed and prepared for analysis and retrieval.
-
-The resource pipeline includes:
-
-- Document loading
-- Text extraction
-- Text preprocessing
-- Chunking
-- Embedding generation
-- Vector storage
-
----
-
-### 2. Semantic Search
-
-The system uses embeddings and vector similarity to retrieve relevant content from learning resources.
-
-This allows the system to find conceptually related information rather than relying only on exact keyword matches.
+1. **Read the PRD** - Understand the full project scope
+2. **Follow LEARNLENS_IMPLEMENTATION_PLAN.md** - Set up your environment today
+3. **Build incrementally** - Focus on MVP features first
+4. **Test continuously** - Validate each component works
+5. **Stay focused** - Avoid feature creep, stick to the plan
 
 ---
 
-### 3. RAG-Based Question Answering
-
-LearnLens AI uses **Retrieval-Augmented Generation (RAG)** to provide answers based on the student's learning resources.
-
-The basic pipeline is:
-
-```text
-Student Question
-       ↓
-Query Processing
-       ↓
-Semantic Retrieval
-       ↓
-Relevant Learning Content
-       ↓
-Context + Question
-       ↓
-Language Model
-       ↓
-Grounded Answer
+**Ready to build something amazing? Start with [LEARNLENS_IMPLEMENTATION_PLAN.md](LEARNLENS_IMPLEMENTATION_PLAN.md) and get your first demo working this week!** 🎯
