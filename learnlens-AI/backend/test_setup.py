@@ -27,10 +27,10 @@ def test_imports():
         return False
     
     try:
-        import openai
-        print("✅ OpenAI imported successfully")
+        import groq
+        print("✅ Groq imported successfully")
     except ImportError as e:
-        print(f"❌ OpenAI import failed: {e}")
+        print(f"❌ Groq import failed: {e}")
         return False
     
     try:
@@ -115,29 +115,28 @@ def test_embedding_model():
         print(f"❌ Embedding model test failed: {e}")
         return False
 
-def test_openai():
-    """Test OpenAI API key"""
-    print("\nTesting OpenAI API...")
+def test_groq():
+    """Test Groq API key configuration"""
+    print("\nTesting Groq API setup...")
     
     try:
-        import openai
+        import groq
         from dotenv import load_dotenv
         import os
         
         load_dotenv()
-        openai.api_key = os.getenv('OPENAI_API_KEY')
+        groq_key = os.getenv('GROQ_API_KEY')
         
-        if not openai.api_key:
-            print("❌ OPENAI_API_KEY not found in .env file")
-            return False
+        if not groq_key or groq_key == "your_groq_api_key_here":
+            print("⚠️  GROQ_API_KEY is not yet set in .env (add your free key from https://console.groq.com)")
+            print("   (System will use built-in grounded synthesizer until key is set)")
+            return True
         
-        print(f"✅ OpenAI API key found (starts with: {openai.api_key[:10]}...)")
-        print("   Note: API key will be tested when you make your first API call")
-        
+        print(f"✅ Groq API key found (starts with: {groq_key[:10]}...)")
         return True
         
     except Exception as e:
-        print(f"❌ OpenAI setup failed: {e}")
+        print(f"❌ Groq setup failed: {e}")
         return False
 
 def main():
@@ -151,7 +150,7 @@ def main():
     results.append(("Package Imports", test_imports()))
     results.append(("Database Connection", test_database()))
     results.append(("Embedding Model", test_embedding_model()))
-    results.append(("OpenAI API", test_openai()))
+    results.append(("Groq API", test_groq()))
     
     # Summary
     print("\n" + "=" * 60)

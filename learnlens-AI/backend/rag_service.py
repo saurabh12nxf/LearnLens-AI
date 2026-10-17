@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-import openai
 
 from vector_store import VectorStore
 
@@ -12,24 +11,25 @@ class RAGService:
     """
     Core RAG Engine for LearnLens AI:
     Orchestrates retrieval (semantic vs baseline) and grounded answer generation
-    with explicit page-level citations.
+    with explicit page-level citations using Groq.
     """
 
     def __init__(self, vector_store: VectorStore):
         self.vector_store = vector_store
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.model_name = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.api_key = os.getenv("GROQ_API_KEY", "")
+        self.model_name = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 
-        self.openai_client = None
-        if self.api_key and self.api_key != "your_openai_api_key_here":
+        self.groq_client = None
+        if self.api_key and self.api_key.strip() not in ["your_groq_api_key_here", ""]:
             try:
-                self.openai_client = openai.OpenAI(
-                    api_key=self.api_key,
-                    max_retries=0,
-                    timeout=4.0,
+                from groq import Groq
+                self.groq_client = Groq(
+                    api_key=self.api_key.strip(),
+                    timeout=10.0,
+                    max_retries=1,
                 )
             except Exception as e:
-                print(f"[RAGService] Notice: OpenAI client init warning: {e}")
+                print(f"[RAGService] Notice: Groq client init issue: {e}")
 
     def generate_grounded_answer(
         self,
@@ -115,10 +115,10 @@ class RAGService:
         answer_text = ""
         model_used = self.model_name
 
-        # Step 3: LLM Answer Generation with graceful fallback
-        if self.openai_client:
+        # Step 3: LLM Answer Generation with graceful model selection & fallback
+        if self.groq_client:
             try:
-                response = self.openai_client.chat.completions.create(
+                response = self.groq_client.chat.completions.create(
                     model=self.model_name,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -128,10 +128,32 @@ class RAGService:
                     max_tokens=600,
                 )
                 answer_text = response.choices[0].message.content.strip()
+                model_used = f"groq/{self.model_name}"
             except Exception as e:
-                print(f"[RAGService] OpenAI API call failed ({e}). Falling back to grounded extractive synthesis.")
-                answer_text = self._extractive_fallback_answer(question, retrieved_chunks)
-                model_used = "learnlens-grounded-synthesizer (offline fallback)"
+                # If configured model fails (e.g. model not found), attempt fallback to qwen/qwen3.8-27b
+                fallback_attempted = False
+                if "model_not_found" in str(e).lower() and self.model_name != "qwen/qwen3.8-27b":
+                    try:
+                        print("[RAGService] Retrying with available Groq model: qwen/qwen3.8-27b...")
+                        response = self.groq_client.chat.completions.create(
+                            model="qwen/qwen3.8-27b",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            temperature=0.2,
+                            max_tokens=600,
+                        )
+                        answer_text = response.choices[0].message.content.strip()
+                        model_used = "groq/qwen/qwen3.8-27b"
+                        fallback_attempted = True
+                    except Exception as inner_e:
+                        print(f"[RAGService] Secondary Groq model attempt failed: {inner_e}")
+
+                if not fallback_attempted:
+                    print(f"[RAGService] Groq API call issue ({e}). Falling back to grounded extractive synthesis.")
+                    answer_text = self._extractive_fallback_answer(question, retrieved_chunks)
+                    model_used = "learnlens-grounded-synthesizer (offline fallback)"
         else:
             answer_text = self._extractive_fallback_answer(question, retrieved_chunks)
             model_used = "learnlens-grounded-synthesizer (offline fallback)"
@@ -149,7 +171,7 @@ class RAGService:
         """
         Deterministic, grounded fallback that synthesizes the most relevant
         sentences from top retrieved chunks. Ensures the system works 100% reliably
-        even without OpenAI credits or when offline.
+        even without an active Groq API key or when offline.
         """
         top_chunks = chunks[:3]
         pages_referenced = sorted(list(set(c["page_number"] for c in top_chunks)))
