@@ -193,7 +193,7 @@
 Backend:
 - FastAPI (Python web framework)
 - PostgreSQL + pgvector (database + vector storage)
-- OpenAI API (for answer generation)
+- Groq API (LLaMA-3.1 for grounded generation)
 - Sentence Transformers (for embeddings)
 - scikit-learn (for analytics)
 

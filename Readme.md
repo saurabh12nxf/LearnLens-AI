@@ -39,7 +39,7 @@ This single document contains:
 
 ## Technology Stack
 
-**Backend**: FastAPI, PostgreSQL + pgvector, OpenAI API, Sentence Transformers  
+**Backend**: FastAPI, PostgreSQL + pgvector, Groq API (LLaMA-3.1), Sentence Transformers  
 **Frontend**: React + TypeScript, Tailwind CSS  
 **AI/ML**: RAG pipeline, scikit-learn, embedding models  
 **Data**: PDF processing, vector search, performance analytics
