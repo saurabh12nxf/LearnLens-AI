@@ -3,7 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import { 
   Send, Sparkles, BookOpen, Check, Copy, Volume2, 
   RotateCcw, Sliders, ChevronDown, ChevronUp, ExternalLink, 
-  Bot, User, HelpCircle, FileText, ArrowRight, ShieldCheck 
+  Bot, User, FileText, ArrowRight, ShieldCheck, CheckCircle2,
+  Zap, Search, Compass, Info
 } from 'lucide-react';
 
 export default function ChatWorkspace({
@@ -73,10 +74,10 @@ export default function ChatWorkspace({
   };
 
   const sampleQuestions = [
-    { text: "What is dynamic programming?", category: "Optimization" },
-    { text: "What is the average time complexity of searching a binary search tree?", category: "Trees" },
-    { text: "What are the two key components of recursion?", category: "Recursion" },
-    { text: "Explain divide and conquer vs recursion", category: "Algorithms" },
+    { text: "What is dynamic programming?", category: "Exam Concept" },
+    { text: "What is the average time complexity of searching a binary search tree?", category: "Quick Recall" },
+    { text: "What are the two key components of recursion?", category: "Key Definitions" },
+    { text: "Explain divide and conquer vs recursion with examples", category: "Comparison" },
   ];
 
   return (
@@ -84,7 +85,7 @@ export default function ChatWorkspace({
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 69px)',
+      height: 'calc(100vh - 63px)',
       background: 'var(--bg-dark)',
       position: 'relative',
     }}>
@@ -92,7 +93,7 @@ export default function ChatWorkspace({
       <div style={{
         padding: '10px 24px',
         borderBottom: '1px solid var(--border-subtle)',
-        background: 'rgba(15, 20, 34, 0.7)',
+        background: 'rgba(15, 20, 34, 0.75)',
         backdropFilter: 'blur(12px)',
         display: 'flex',
         alignItems: 'center',
@@ -101,29 +102,29 @@ export default function ChatWorkspace({
         gap: '12px',
         zIndex: 10,
       }}>
-        {/* Left: Scope & Retrieval Strategy */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+        {/* Left: Scope & Student-Friendly Search Mode */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Active Scope Badge */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            fontSize: '0.8rem',
+            fontSize: '0.78rem',
             color: selectedDoc ? '#a5b4fc' : 'var(--text-muted)',
-            background: selectedDoc ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+            background: selectedDoc ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.04)',
             padding: '4px 12px',
             borderRadius: 'var(--radius-full)',
             border: selectedDoc ? '1px solid rgba(99, 102, 241, 0.35)' : '1px solid var(--border-subtle)',
           }}>
-            <FileText size={14} />
-            <span>Scope: <strong>{selectedDoc ? selectedDoc.title : 'All Study Documents'}</strong></span>
+            <FileText size={13} />
+            <span>Scope: <strong>{selectedDoc ? selectedDoc.title : 'All Materials'}</strong></span>
           </div>
 
-          {/* Retrieval Method Switcher (PRD Requirement) */}
+          {/* Student-Friendly Search Mode (Smart Concept vs Exact Keyword) */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            background: 'rgba(0, 0, 0, 0.3)',
+            background: 'rgba(0, 0, 0, 0.35)',
             borderRadius: 'var(--radius-full)',
             padding: '2px',
             border: '1px solid var(--border-subtle)',
@@ -131,7 +132,7 @@ export default function ChatWorkspace({
             <button
               onClick={() => setRetrievalMethod('semantic')}
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 fontWeight: 600,
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-full)',
@@ -141,13 +142,14 @@ export default function ChatWorkspace({
                 color: retrievalMethod === 'semantic' ? '#ffffff' : 'var(--text-muted)',
                 transition: 'var(--transition)',
               }}
+              title="AI understands concepts and synonyms across your notes"
             >
-              Semantic Vector (pgvector)
+              Smart Search
             </button>
             <button
               onClick={() => setRetrievalMethod('keyword_baseline')}
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 fontWeight: 600,
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-full)',
@@ -157,18 +159,18 @@ export default function ChatWorkspace({
                 color: retrievalMethod === 'keyword_baseline' ? '#ffffff' : 'var(--text-dim)',
                 transition: 'var(--transition)',
               }}
-              title="Lexical keyword search baseline comparison"
+              title="Looks for exact matching words in documents"
             >
-              Keyword Baseline
+              Exact Match
             </button>
           </div>
         </div>
 
-        {/* Right: Top-K & Clear Chat */}
+        {/* Right: Study Depth (Quick / Balanced / Thorough) & Clear Chat */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
             <Sliders size={13} />
-            <span>Top-K:</span>
+            <span>Depth:</span>
             <select
               value={topK}
               onChange={(e) => setTopK(Number(e.target.value))}
@@ -178,15 +180,14 @@ export default function ChatWorkspace({
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '6px',
                 padding: '3px 8px',
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 outline: 'none',
                 cursor: 'pointer',
               }}
             >
-              <option value={2}>2 Chunks</option>
-              <option value={3}>3 Chunks</option>
-              <option value={4}>4 Chunks</option>
-              <option value={6}>6 Chunks</option>
+              <option value={2}>Quick (2 Sources)</option>
+              <option value={4}>Balanced (4 Sources)</option>
+              <option value={6}>Thorough (6 Sources)</option>
             </select>
           </div>
 
@@ -194,10 +195,10 @@ export default function ChatWorkspace({
             <button
               onClick={onClearChat}
               className="btn btn-ghost"
-              style={{ fontSize: '0.75rem', padding: '4px 10px', height: '28px' }}
+              style={{ fontSize: '0.74rem', padding: '4px 10px', height: '26px' }}
               title="Reset conversation"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={12} />
               <span>Clear</span>
             </button>
           )}
@@ -214,78 +215,78 @@ export default function ChatWorkspace({
         gap: '24px',
       }}>
         {messages.length === 0 ? (
-          /* Empty State: Welcome Hero Banner & Suggested Prompts */
+          /* Empty State: Student-Centric Welcome Hero Banner */
           <div style={{
-            maxWidth: '780px',
+            maxWidth: '740px',
             margin: 'auto',
             textAlign: 'center',
-            padding: '30px 20px',
+            padding: '24px 16px',
           }} className="animate-fade-in">
             {/* Glow Icon */}
             <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '20px',
+              width: '60px',
+              height: '60px',
+              borderRadius: '18px',
               background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(6, 182, 212, 0.25) 100%)',
-              border: '1px solid rgba(99, 102, 241, 0.4)',
+              border: '1px solid rgba(99, 102, 241, 0.35)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              margin: '0 auto 18px',
+              margin: '0 auto 16px',
               boxShadow: 'var(--shadow-glow)',
             }}>
-              <Sparkles size={32} color="#818cf8" />
+              <Sparkles size={28} color="#818cf8" />
             </div>
 
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '10px' }}>
-              Ask your study notes with <span className="text-gradient">grounded citations</span>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '8px' }}>
+              Study with <span className="text-gradient">verified citations</span>
             </h2>
 
             <p style={{
-              fontSize: '0.95rem',
+              fontSize: '0.92rem',
               color: 'var(--text-muted)',
-              maxWidth: '580px',
-              margin: '0 auto 28px',
+              maxWidth: '560px',
+              margin: '0 auto 24px',
               lineHeight: 1.6,
             }}>
-              LearnLens uses <strong>PostgreSQL pgvector (384-dimensional cosine similarity)</strong> and <strong>Groq Qwen 27B</strong> to formulate answers strictly backed by your uploaded PDF pages.
+              Ask questions directly from your lecture notes, textbook chapters, and exam materials. LearnLens gives you clear, structured answers backed by exact page citations—so you can study with 100% confidence.
             </p>
 
-            {/* Guarantees Badges */}
+            {/* Student Trust Guarantees */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '16px',
-              marginBottom: '36px',
+              gap: '12px',
+              marginBottom: '32px',
               flexWrap: 'wrap',
             }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 color: '#6ee7b7',
                 background: 'rgba(16, 185, 129, 0.1)',
-                padding: '6px 14px',
+                padding: '5px 12px',
                 borderRadius: 'var(--radius-full)',
                 border: '1px solid rgba(16, 185, 129, 0.25)',
               }}>
-                <ShieldCheck size={16} />
-                <span>Zero Hallucination Grounding</span>
+                <ShieldCheck size={14} />
+                <span>Strictly Grounded (No Hallucinations)</span>
               </div>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 color: '#67e8f9',
                 background: 'rgba(6, 182, 212, 0.1)',
-                padding: '6px 14px',
+                padding: '5px 12px',
                 borderRadius: 'var(--radius-full)',
                 border: '1px solid rgba(6, 182, 212, 0.25)',
               }}>
-                <BookOpen size={16} />
+                <BookOpen size={14} />
                 <span>Exact Page Citations [Page X]</span>
               </div>
             </div>
@@ -293,20 +294,20 @@ export default function ChatWorkspace({
             {/* Quick Starter Prompts */}
             <div style={{ textAlign: 'left' }}>
               <p style={{
-                fontSize: '0.78rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 color: 'var(--text-dim)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
-                marginBottom: '12px',
+                marginBottom: '10px',
                 textAlign: 'center',
               }}>
-                Try asking a sample question:
+                Try asking a question:
               </p>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                gap: '12px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                gap: '10px',
               }}>
                 {sampleQuestions.map((q, idx) => (
                   <button
@@ -319,9 +320,9 @@ export default function ChatWorkspace({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '12px 16px',
+                      padding: '11px 14px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'rgba(255, 255, 255, 0.03)',
+                      background: 'rgba(255, 255, 255, 0.025)',
                       border: '1px solid var(--border-subtle)',
                       color: 'var(--text-main)',
                       cursor: 'pointer',
@@ -334,18 +335,18 @@ export default function ChatWorkspace({
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.025)';
                     }}
                   >
                     <div>
-                      <span style={{ fontSize: '0.7rem', color: '#818cf8', display: 'block', marginBottom: '2px' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#818cf8', display: 'block', marginBottom: '2px', fontWeight: 600 }}>
                         {q.category}
                       </span>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 500 }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 500 }}>
                         {q.text}
                       </span>
                     </div>
-                    <ArrowRight size={15} color="var(--text-dim)" />
+                    <ArrowRight size={14} color="var(--text-dim)" />
                   </button>
                 ))}
               </div>
@@ -370,12 +371,12 @@ export default function ChatWorkspace({
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
+                gap: '9px',
                 alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}>
                 <div style={{
-                  width: '28px',
-                  height: '28px',
+                  width: '26px',
+                  height: '26px',
                   borderRadius: '50%',
                   background: msg.role === 'user' 
                     ? 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)' 
@@ -384,18 +385,19 @@ export default function ChatWorkspace({
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                  {msg.role === 'user' ? <User size={15} color="#fff" /> : <Bot size={15} color="#fff" />}
+                  {msg.role === 'user' ? <User size={14} color="#fff" /> : <Bot size={14} color="#fff" />}
                 </div>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
-                  {msg.role === 'user' ? 'You' : 'LearnLens Grounded AI'}
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9' }}>
+                  {msg.role === 'user' ? 'You' : 'Study Assistant'}
                 </span>
-                {msg.role === 'assistant' && msg.model && (
-                  <span className="badge badge-primary" style={{ fontSize: '0.65rem' }}>
-                    {msg.model}
+                {msg.role === 'assistant' && (
+                  <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>
+                    <CheckCircle2 size={11} />
+                    <span>Verified Answer</span>
                   </span>
                 )}
                 {msg.timestamp && (
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
                     {msg.timestamp}
                   </span>
                 )}
@@ -415,7 +417,7 @@ export default function ChatWorkspace({
                 color: 'var(--text-main)',
               }}>
                 {msg.role === 'user' ? (
-                  <p style={{ fontSize: '0.95rem', margin: 0, whiteSpace: 'pre-wrap' }}>
+                  <p style={{ fontSize: '0.92rem', margin: 0, whiteSpace: 'pre-wrap' }}>
                     {msg.content}
                   </p>
                 ) : (
@@ -445,7 +447,7 @@ export default function ChatWorkspace({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <BookOpen size={15} color="#38bdf8" />
                             <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#38bdf8' }}>
-                              Verified Citations ({msg.citations.length} retrieved chunks)
+                              Verified Citations ({msg.citations.length} document references)
                             </span>
                           </div>
                           {expandedCitations[index] ? <ChevronUp size={16} color="var(--text-dim)" /> : <ChevronDown size={16} color="var(--text-dim)" />}
@@ -484,7 +486,7 @@ export default function ChatWorkspace({
                                       padding: '1px 6px',
                                       borderRadius: '4px',
                                     }}>
-                                      #{c.source_index}
+                                      Source #{c.source_index}
                                     </span>
                                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9' }}>
                                       {c.document_filename}
@@ -522,11 +524,9 @@ export default function ChatWorkspace({
                       paddingTop: '8px',
                       borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                          Retrieval: <strong>{msg.retrieval_method || 'semantic'}</strong> • Chunks: <strong>{msg.chunks_used || 0}</strong>
-                        </span>
-                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                        Directly referenced from your uploaded study materials
+                      </span>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <button
@@ -557,7 +557,7 @@ export default function ChatWorkspace({
           ))
         )}
 
-        {/* Loading Spinner / Skeleton */}
+        {/* Loading Spinner */}
         {loading && (
           <div style={{
             display: 'flex',
@@ -567,24 +567,24 @@ export default function ChatWorkspace({
             margin: '0 auto',
             width: '100%',
           }} className="animate-fade-in">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
               <div style={{
-                width: '28px',
-                height: '28px',
+                width: '26px',
+                height: '26px',
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                <Bot size={15} color="#fff" />
+                <Bot size={14} color="#fff" />
               </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
-                LearnLens Grounded AI
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9' }}>
+                Study Assistant
               </span>
             </div>
             <div style={{
-              padding: '16px 20px',
+              padding: '14px 18px',
               borderRadius: 'var(--radius-md)',
               background: 'var(--bg-card)',
               border: '1px solid var(--border-active)',
@@ -594,15 +594,15 @@ export default function ChatWorkspace({
               gap: '12px',
             }}>
               <div style={{
-                width: '18px',
-                height: '18px',
+                width: '16px',
+                height: '16px',
                 border: '2px solid rgba(99, 102, 241, 0.3)',
                 borderTopColor: '#6366f1',
                 borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
-              <span style={{ fontSize: '0.88rem', color: '#a5b4fc', fontWeight: 500 }}>
-                Searching pgvector embeddings & synthesizing answer via Groq Qwen 27B...
+              <span style={{ fontSize: '0.85rem', color: '#a5b4fc', fontWeight: 500 }}>
+                Reviewing your study notes & compiling verified answer...
               </span>
             </div>
           </div>
@@ -613,8 +613,8 @@ export default function ChatWorkspace({
 
       {/* Input Form at Bottom */}
       <div style={{
-        padding: '16px 28px 20px',
-        background: 'rgba(11, 15, 25, 0.85)',
+        padding: '14px 28px 18px',
+        background: 'rgba(11, 15, 25, 0.9)',
         backdropFilter: 'blur(16px)',
         borderTop: '1px solid var(--border-subtle)',
       }}>
@@ -632,7 +632,7 @@ export default function ChatWorkspace({
             background: 'var(--bg-card)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '6px 10px 6px 18px',
+            padding: '5px 8px 5px 16px',
             boxShadow: 'var(--shadow-md)',
             transition: 'var(--transition)',
           }}>
@@ -649,7 +649,7 @@ export default function ChatWorkspace({
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--text-main)',
-                fontSize: '0.92rem',
+                fontSize: '0.9rem',
                 outline: 'none',
                 padding: '6px 0',
               }}
@@ -662,26 +662,26 @@ export default function ChatWorkspace({
               style={{
                 borderRadius: 'var(--radius-sm)',
                 padding: '8px 16px',
-                fontSize: '0.85rem',
-                height: '38px',
+                fontSize: '0.84rem',
+                height: '36px',
               }}
             >
               <span>Ask</span>
-              <Send size={15} />
+              <Send size={14} />
             </button>
           </div>
 
+          {/* Clean Student Footer */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             marginTop: '8px',
             padding: '0 4px',
             fontSize: '0.72rem',
             color: 'var(--text-dim)',
           }}>
-            <span>Press <strong>Enter</strong> to send • Answers are strictly grounded in your documents</span>
-            <span>FastAPI + pgvector + Groq Qwen 27B</span>
+            <span>Press <strong>Enter</strong> to send • Answers are strictly sourced from your materials</span>
           </div>
         </form>
       </div>

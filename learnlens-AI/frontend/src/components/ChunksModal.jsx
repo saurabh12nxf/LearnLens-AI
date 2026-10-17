@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Database, Layers, CheckCircle, Search, FileText } from 'lucide-react';
+import { X, BookOpen, Layers, CheckCircle, Search, FileText } from 'lucide-react';
 
 export default function ChunksModal({ doc, onClose }) {
   const [chunks, setChunks] = useState([]);
@@ -14,7 +14,7 @@ export default function ChunksModal({ doc, onClose }) {
       setError(null);
       try {
         const res = await fetch(`/api/documents/${doc.id}/chunks?limit=50`);
-        if (!res.ok) throw new Error('Failed to load chunks');
+        if (!res.ok) throw new Error('Failed to load document sections');
         const data = await res.json();
         setChunks(data);
       } catch (err) {
@@ -83,14 +83,14 @@ export default function ChunksModal({ doc, onClose }) {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Database size={18} color="#818cf8" />
+              <BookOpen size={18} color="#818cf8" />
             </div>
             <div>
               <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>
-                pgvector Chunks Inspector
+                Document Content Preview
               </h3>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: 0 }}>
-                {doc.title} ({doc.chunk_count} total chunks, {doc.page_count} pages)
+                {doc.title} ({doc.chunk_count} sections indexed across {doc.page_count} pages)
               </p>
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function ChunksModal({ doc, onClose }) {
             <Search size={14} color="var(--text-dim)" />
             <input
               type="text"
-              placeholder="Search in chunks..."
+              placeholder="Search in extracted text..."
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               style={{
@@ -145,10 +145,7 @@ export default function ChunksModal({ doc, onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
               <CheckCircle size={12} />
-              <span>384-Dim Vectorized</span>
-            </span>
-            <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
-              Sliding Window: 512 tokens
+              <span>Indexed & Ready</span>
             </span>
           </div>
         </div>
@@ -164,7 +161,7 @@ export default function ChunksModal({ doc, onClose }) {
         }}>
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '30px 0' }}>
-              Loading chunks from PostgreSQL pgvector...
+              Loading extracted text sections...
             </p>
           ) : error ? (
             <p style={{ textAlign: 'center', color: 'var(--accent-rose)', padding: '30px 0' }}>
@@ -172,7 +169,7 @@ export default function ChunksModal({ doc, onClose }) {
             </p>
           ) : filteredChunks.length === 0 ? (
             <p style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '30px 0' }}>
-              No matching chunks found.
+              No matching sections found.
             </p>
           ) : (
             filteredChunks.map((chunk) => (
@@ -200,14 +197,14 @@ export default function ChunksModal({ doc, onClose }) {
                       padding: '2px 8px',
                       borderRadius: '4px',
                     }}>
-                      Chunk #{chunk.chunk_index}
+                      Section #{chunk.chunk_index}
                     </span>
                     <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>
                       Page {chunk.page_number}
                     </span>
                   </div>
                   <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600 }}>
-                    ✓ Embedded in pgvector
+                    ✓ Ready for search
                   </span>
                 </div>
                 <p style={{
@@ -216,7 +213,7 @@ export default function ChunksModal({ doc, onClose }) {
                   lineHeight: 1.6,
                   whiteSpace: 'pre-wrap',
                   margin: 0,
-                  fontFamily: 'var(--font-mono)',
+                  fontFamily: 'var(--font-sans)',
                 }}>
                   {chunk.chunk_text}
                 </p>

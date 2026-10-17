@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
-  UploadCloud, FileText, CheckCircle, Trash2, Eye, Filter, 
-  Search, BookOpen, Clock, AlertCircle, FilePlus, Sparkles 
+  UploadCloud, FileText, Trash2, Eye, Filter, 
+  Search, BookOpen, AlertCircle, FilePlus, Sparkles, Shield
 } from 'lucide-react';
 
 export default function DocumentSidebar({
@@ -30,7 +30,7 @@ export default function DocumentSidebar({
 
   const handleFileUpload = async (file) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setUploadError('Only PDF files are currently supported.');
+      setUploadError('Please select a PDF document.');
       return;
     }
 
@@ -58,7 +58,7 @@ export default function DocumentSidebar({
       if (fileInputRef.current) fileInputRef.current.value = '';
       onUploadSuccess(data.document);
     } catch (err) {
-      setUploadError(err.message || 'Error uploading file');
+      setUploadError(err.message || 'Error processing document');
     } finally {
       setUploading(false);
     }
@@ -77,25 +77,25 @@ export default function DocumentSidebar({
 
   return (
     <aside style={{
-      width: '360px',
-      minWidth: '340px',
-      maxWidth: '380px',
+      width: '350px',
+      minWidth: '330px',
+      maxWidth: '370px',
       borderRight: '1px solid var(--border-subtle)',
       background: 'var(--bg-sidebar)',
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 69px)',
+      height: 'calc(100vh - 63px)',
       overflow: 'hidden',
     }}>
       {/* Upload Header Area */}
-      <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ padding: '18px 18px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BookOpen size={18} color="#6366f1" />
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Study Library</h2>
+            <BookOpen size={17} color="#6366f1" />
+            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Study Materials</h2>
           </div>
-          <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
-            {documents.length} Available
+          <span className="badge badge-primary" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+            {documents.length} Loaded
           </span>
         </div>
 
@@ -108,7 +108,7 @@ export default function DocumentSidebar({
           style={{
             border: dragOver ? '2px dashed #6366f1' : '1px dashed var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '18px 14px',
+            padding: '16px 12px',
             textAlign: 'center',
             background: dragOver ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.02)',
             cursor: uploading ? 'wait' : 'pointer',
@@ -124,27 +124,27 @@ export default function DocumentSidebar({
             disabled={uploading}
           />
           <div style={{
-            width: '38px',
-            height: '38px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
-            background: 'rgba(99, 102, 241, 0.15)',
+            background: 'rgba(99, 102, 241, 0.12)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             margin: '0 auto 8px',
           }}>
-            <UploadCloud size={20} color="#818cf8" />
+            <UploadCloud size={18} color="#818cf8" />
           </div>
-          <p style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 3px' }}>
-            {uploading ? 'Processing PDF & Vectorizing...' : 'Upload Study Material (PDF)'}
+          <p style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 2px' }}>
+            {uploading ? 'Analyzing & indexing document...' : 'Upload Notes or Textbook (PDF)'}
           </p>
           <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', margin: 0 }}>
-            Drag & drop or click to browse
+            Click to browse or drop file here
           </p>
         </div>
 
         {/* Optional Custom Title input */}
-        <div style={{ marginTop: '10px' }}>
+        <div style={{ marginTop: '8px' }}>
           <input
             type="text"
             placeholder="Custom title (optional)..."
@@ -153,7 +153,7 @@ export default function DocumentSidebar({
             disabled={uploading}
             style={{
               width: '100%',
-              padding: '7px 12px',
+              padding: '6px 11px',
               fontSize: '0.78rem',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--border-subtle)',
@@ -164,7 +164,7 @@ export default function DocumentSidebar({
           />
         </div>
 
-        {/* Error notification if any */}
+        {/* Error notification */}
         {uploadError && (
           <div style={{
             display: 'flex',
@@ -186,14 +186,14 @@ export default function DocumentSidebar({
 
       {/* Scope Selector: All Documents vs Single Document */}
       <div style={{
-        padding: '10px 16px',
+        padding: '8px 16px',
         background: 'rgba(255, 255, 255, 0.02)',
         borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Query Scope:</span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Search in:</span>
         <button
           onClick={() => setSelectedDocId(null)}
           className={`btn ${selectedDocId === null ? 'btn-primary' : 'btn-ghost'}`}
@@ -224,7 +224,7 @@ export default function DocumentSidebar({
             <Search size={13} color="var(--text-dim)" />
             <input
               type="text"
-              placeholder="Search uploaded files..."
+              placeholder="Filter materials..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               style={{
@@ -244,10 +244,10 @@ export default function DocumentSidebar({
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '14px 16px',
+        padding: '12px 14px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '8px',
       }}>
         {loadingDocuments ? (
           <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-dim)' }}>
@@ -256,17 +256,17 @@ export default function DocumentSidebar({
         ) : filteredDocs.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            padding: '40px 16px',
+            padding: '36px 14px',
             background: 'rgba(255, 255, 255, 0.02)',
             borderRadius: 'var(--radius-md)',
             border: '1px dashed var(--border-subtle)',
           }}>
-            <FilePlus size={32} color="#64748b" style={{ margin: '0 auto 10px' }} />
+            <FilePlus size={28} color="#64748b" style={{ margin: '0 auto 8px' }} />
             <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' }}>
-              No documents yet
+              No study materials yet
             </p>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-              Upload your lecture notes, DSA textbooks, or study materials to start grounded RAG Q&A.
+              Upload your lecture notes, textbook chapters, or syllabus PDF to start asking questions.
             </p>
           </div>
         ) : (
@@ -277,20 +277,19 @@ export default function DocumentSidebar({
                 key={doc.id}
                 onClick={() => setSelectedDocId(isSelected ? null : doc.id)}
                 style={{
-                  padding: '12px 14px',
+                  padding: '11px 13px',
                   borderRadius: 'var(--radius-md)',
-                  background: isSelected ? 'rgba(99, 102, 241, 0.14)' : 'rgba(255, 255, 255, 0.03)',
-                  border: isSelected ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid var(--border-subtle)',
+                  background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.025)',
+                  border: isSelected ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--border-subtle)',
                   cursor: 'pointer',
                   transition: 'var(--transition)',
-                  position: 'relative',
                 }}
               >
                 {/* Document Header */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', marginBottom: '6px' }}>
                   <div style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '30px',
+                    height: '30px',
                     borderRadius: '8px',
                     background: isSelected ? '#6366f1' : 'rgba(255, 255, 255, 0.06)',
                     display: 'flex',
@@ -298,11 +297,11 @@ export default function DocumentSidebar({
                     justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <FileText size={16} color={isSelected ? '#ffffff' : '#94a3b8'} />
+                    <FileText size={15} color={isSelected ? '#ffffff' : '#94a3b8'} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{
-                      fontSize: '0.86rem',
+                      fontSize: '0.84rem',
                       fontWeight: 600,
                       color: isSelected ? '#a5b4fc' : '#f8fafc',
                       margin: '0 0 2px',
@@ -313,7 +312,7 @@ export default function DocumentSidebar({
                       {doc.title}
                     </h3>
                     <p style={{
-                      fontSize: '0.72rem',
+                      fontSize: '0.7rem',
                       color: 'var(--text-dim)',
                       margin: 0,
                       whiteSpace: 'nowrap',
@@ -326,12 +325,12 @@ export default function DocumentSidebar({
                 </div>
 
                 {/* Metadata Pills */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
                   <span className="badge badge-cyan" style={{ fontSize: '0.66rem' }}>
                     {doc.page_count} {doc.page_count === 1 ? 'Page' : 'Pages'}
                   </span>
                   <span className="badge badge-primary" style={{ fontSize: '0.66rem' }}>
-                    {doc.chunk_count} Chunks
+                    {doc.chunk_count} Sections Indexed
                   </span>
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginLeft: 'auto' }}>
                     {formatFileSize(doc.file_size)}
@@ -344,30 +343,28 @@ export default function DocumentSidebar({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   paddingTop: '6px',
-                  borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.04)',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{
-                      fontSize: '0.72rem',
-                      color: isSelected ? '#818cf8' : 'var(--text-dim)',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}>
-                      {isSelected ? '✓ Filter active' : 'Click to filter'}
-                    </span>
-                  </div>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    color: isSelected ? '#818cf8' : 'var(--text-dim)',
+                    fontWeight: isSelected ? 600 : 400,
+                  }}>
+                    {isSelected ? '✓ Filter active' : 'Click to focus search'}
+                  </span>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onInspectChunks(doc);
                       }}
                       className="btn btn-ghost"
-                      style={{ padding: '3px 7px', fontSize: '0.72rem', height: '26px' }}
-                      title="Inspect pgvector chunks"
+                      style={{ padding: '2px 6px', fontSize: '0.7rem', height: '24px' }}
+                      title="Inspect extracted text sections"
                     >
-                      <Eye size={13} />
-                      <span>Chunks</span>
+                      <Eye size={12} />
+                      <span>Preview</span>
                     </button>
 
                     <button
@@ -376,10 +373,10 @@ export default function DocumentSidebar({
                         onDeleteDoc(doc.id, doc.title);
                       }}
                       className="btn btn-danger-ghost"
-                      style={{ padding: '3px 7px', fontSize: '0.72rem', height: '26px' }}
-                      title="Delete document"
+                      style={{ padding: '2px 6px', fontSize: '0.7rem', height: '24px' }}
+                      title="Remove document"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -389,21 +386,19 @@ export default function DocumentSidebar({
         )}
       </div>
 
-      {/* Footer Info */}
+      {/* Clean Privacy / Student Footer (replaces the raw embedding model line) */}
       <div style={{
-        padding: '12px 18px',
+        padding: '11px 16px',
         borderTop: '1px solid var(--border-subtle)',
-        background: 'rgba(0, 0, 0, 0.2)',
+        background: 'rgba(0, 0, 0, 0.25)',
         fontSize: '0.72rem',
         color: 'var(--text-dim)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: '6px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Sparkles size={13} color="#6366f1" />
-          <span>Embedding: <strong>all-MiniLM-L6-v2 (384d)</strong></span>
-        </div>
+        <Shield size={13} color="#10b981" />
+        <span>Study materials are kept secure & private</span>
       </div>
     </aside>
   );

@@ -3,18 +3,15 @@ import Navbar from './components/Navbar';
 import DocumentSidebar from './components/DocumentSidebar';
 import ChatWorkspace from './components/ChatWorkspace';
 import ChunksModal from './components/ChunksModal';
-import PhaseRoadmapModal from './components/PhaseRoadmapModal';
 
 export default function App() {
   const [documents, setDocuments] = useState([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState(null);
   const [inspectingDoc, setInspectingDoc] = useState(null);
-  const [showRoadmap, setShowRoadmap] = useState(false);
-  const [activeTab, setActiveTab] = useState('rag');
   const [backendHealthy, setBackendHealthy] = useState(false);
 
-  // RAG Query Settings
+  // Search & Retrieval Settings
   const [retrievalMethod, setRetrievalMethod] = useState('semantic');
   const [topK, setTopK] = useState(4);
   const [loading, setLoading] = useState(false);
@@ -59,17 +56,17 @@ export default function App() {
   };
 
   const handleUploadSuccess = (newDoc) => {
-    showToast(`Indexed "${newDoc.title}" (${newDoc.page_count} pages, ${newDoc.chunk_count} chunks)`, 'success');
+    showToast(`Added "${newDoc.title}" (${newDoc.page_count} pages)`, 'success');
     fetchDocuments();
   };
 
   const handleDeleteDoc = async (docId, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    if (!window.confirm(`Are you sure you want to remove "${title}"?`)) return;
 
     try {
       const res = await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
       if (res.ok) {
-        showToast(`Deleted "${title}"`, 'info');
+        showToast(`Removed "${title}"`, 'info');
         if (selectedDocId === docId) setSelectedDocId(null);
         fetchDocuments();
       } else {
@@ -125,7 +122,7 @@ export default function App() {
     } catch (err) {
       const errorMessage = {
         role: 'assistant',
-        content: `⚠️ **Unable to complete query:** ${err.message}. Please verify the backend is running and documents are indexed.`,
+        content: `⚠️ **Unable to find an answer:** ${err.message}. Please verify the backend is connected and documents are uploaded.`,
         citations: [],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -148,9 +145,6 @@ export default function App() {
       <Navbar
         documentCount={documents.length}
         backendHealthy={backendHealthy}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onOpenRoadmap={() => setShowRoadmap(true)}
       />
 
       {/* Main Workspace Layout */}
@@ -180,18 +174,11 @@ export default function App() {
         />
       </div>
 
-      {/* Chunks Inspector Modal */}
+      {/* Document Content Preview Modal */}
       {inspectingDoc && (
         <ChunksModal
           doc={inspectingDoc}
           onClose={() => setInspectingDoc(null)}
-        />
-      )}
-
-      {/* 3 Pillars Architecture & Roadmap Modal */}
-      {showRoadmap && (
-        <PhaseRoadmapModal
-          onClose={() => setShowRoadmap(false)}
         />
       )}
 
