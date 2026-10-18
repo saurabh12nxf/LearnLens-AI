@@ -25,8 +25,8 @@ class RAGService:
                 from groq import Groq
                 self.groq_client = Groq(
                     api_key=self.api_key.strip(),
-                    timeout=10.0,
-                    max_retries=1,
+                    timeout=25.0,
+                    max_retries=2,
                 )
             except Exception as e:
                 print(f"[RAGService] Notice: Groq client init issue: {e}")
@@ -103,7 +103,8 @@ class RAGService:
             "2. If the context does not contain enough information to answer the question, "
             "state clearly: 'The provided study materials do not contain sufficient information to answer this question.'\n"
             "3. Cite the exact page number(s) (e.g., [Page X]) whenever explaining concepts.\n"
-            "4. Keep explanations educational, structured, and easy to understand."
+            "4. Address every part of the student's question completely (e.g., both time complexity and space requirements if asked).\n"
+            "5. Keep explanations educational, structured, and easy to understand."
         )
 
         user_prompt = (

@@ -63,7 +63,7 @@ BENCHMARK_DATASET = [
         "question": "What is the time complexity and auxiliary space required by merge sort?",
         "expected_page": 2,
         "topic": "Divide and Conquer",
-        "ground_truth_concepts": ["O(n log n)", "O(n) auxiliary"],
+        "ground_truth_concepts": ["O(n log n)", "O(n)"],
     },
 ]
 
