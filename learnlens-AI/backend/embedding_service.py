@@ -1,6 +1,11 @@
 import os
+import sys
 from typing import List, Union
 import numpy as np
+
+# Prevent broken torchvision C++ binary mismatch from intercepting text transformer imports
+sys.modules["torchvision"] = None
+
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
