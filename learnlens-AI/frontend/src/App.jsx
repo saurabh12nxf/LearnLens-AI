@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import DocumentSidebar from './components/DocumentSidebar';
 import ChatWorkspace from './components/ChatWorkspace';
+import QuizWorkspace from './components/QuizWorkspace';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import StudyPlanWorkspace from './components/StudyPlanWorkspace';
 import ChunksModal from './components/ChunksModal';
 
 export default function App() {
@@ -10,6 +13,10 @@ export default function App() {
   const [selectedDocId, setSelectedDocId] = useState(null);
   const [inspectingDoc, setInspectingDoc] = useState(null);
   const [backendHealthy, setBackendHealthy] = useState(false);
+
+  // Active Tab: 'assistant' | 'quizzes' | 'analytics' | 'plans'
+  const [activeTab, setActiveTab] = useState('assistant');
+  const [focusTopicForPlan, setFocusTopicForPlan] = useState('');
 
   // Search & Retrieval Settings
   const [retrievalMethod, setRetrievalMethod] = useState('semantic');
@@ -143,6 +150,8 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-dark)' }}>
       {/* Top Navbar */}
       <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         documentCount={documents.length}
         backendHealthy={backendHealthy}
       />
@@ -158,20 +167,68 @@ export default function App() {
           onUploadSuccess={handleUploadSuccess}
           onInspectChunks={(doc) => setInspectingDoc(doc)}
           onDeleteDoc={handleDeleteDoc}
+          onPracticeQuiz={(doc) => {
+            setSelectedDocId(doc.id);
+            setActiveTab('quizzes');
+          }}
         />
 
-        {/* Center/Right Grounded Q&A Workspace */}
-        <ChatWorkspace
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          loading={loading}
-          onClearChat={handleClearChat}
-          selectedDoc={selectedDoc}
-          retrievalMethod={retrievalMethod}
-          setRetrievalMethod={setRetrievalMethod}
-          topK={topK}
-          setTopK={setTopK}
-        />
+        {/* Dynamic Tab View */}
+        {activeTab === 'assistant' && (
+          <ChatWorkspace
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            loading={loading}
+            onClearChat={handleClearChat}
+            selectedDoc={selectedDoc}
+            retrievalMethod={retrievalMethod}
+            setRetrievalMethod={setRetrievalMethod}
+            topK={topK}
+            setTopK={setTopK}
+          />
+        )}
+
+        {activeTab === 'quizzes' && (
+          <QuizWorkspace
+            documents={documents}
+            selectedDocId={selectedDocId}
+            onNavigateToAnalytics={() => setActiveTab('analytics')}
+            onNavigateToChat={() => setActiveTab('assistant')}
+            showToast={showToast}
+          />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard
+            onNavigateToQuiz={() => setActiveTab('quizzes')}
+            onNavigateToChatWithTopic={(topic) => {
+              setActiveTab('assistant');
+              handleSendMessage(`Can you explain ${topic} in detail with core principles and examples based on my study notes?`);
+            }}
+            onNavigateToStudyPlanWithTopic={(topic) => {
+              setFocusTopicForPlan(topic);
+              setActiveTab('plans');
+            }}
+            showToast={showToast}
+          />
+        )}
+
+        {activeTab === 'plans' && (
+          <StudyPlanWorkspace
+            documents={documents}
+            selectedDocId={selectedDocId}
+            initialFocusTopic={focusTopicForPlan}
+            onNavigateToChatWithTopic={(topic) => {
+              setActiveTab('assistant');
+              handleSendMessage(`Can you explain ${topic} in detail with core principles and examples based on my study notes?`);
+            }}
+            onNavigateToQuizWithTopic={() => {
+              setActiveTab('quizzes');
+            }}
+            onNavigateToAnalytics={() => setActiveTab('analytics')}
+            showToast={showToast}
+          />
+        )}
       </div>
 
       {/* Document Content Preview Modal */}

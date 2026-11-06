@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   UploadCloud, FileText, Trash2, Eye, Filter, 
-  Search, BookOpen, AlertCircle, FilePlus, Sparkles, Shield
+  Search, BookOpen, AlertCircle, FilePlus, Sparkles, Shield, HelpCircle
 } from 'lucide-react';
 
 export default function DocumentSidebar({
@@ -12,6 +12,7 @@ export default function DocumentSidebar({
   onUploadSuccess,
   onInspectChunks,
   onDeleteDoc,
+  onPracticeQuiz,
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -354,6 +355,19 @@ export default function DocumentSidebar({
                   </span>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPracticeQuiz?.(doc);
+                      }}
+                      className="btn btn-ghost"
+                      style={{ padding: '2px 6px', fontSize: '0.7rem', height: '24px', color: '#a5b4fc' }}
+                      title="Practice a quiz from this document"
+                    >
+                      <HelpCircle size={12} color="#818cf8" />
+                      <span>Quiz</span>
+                    </button>
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
