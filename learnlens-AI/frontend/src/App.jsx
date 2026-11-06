@@ -6,8 +6,12 @@ import QuizWorkspace from './components/QuizWorkspace';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import StudyPlanWorkspace from './components/StudyPlanWorkspace';
 import ChunksModal from './components/ChunksModal';
+import LandingPage from './components/LandingPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-export default function App() {
+function AuthenticatedWorkspace() {
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+
   const [documents, setDocuments] = useState([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState(null);
@@ -32,8 +36,10 @@ export default function App() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Check health and load documents on mount
+  // Check health and load documents whenever authenticated user changes
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const initApp = async () => {
       try {
         const healthRes = await fetch('/health');
@@ -44,8 +50,11 @@ export default function App() {
       await fetchDocuments();
     };
 
+    // Reset workspace state for new user
+    setMessages([]);
+    setSelectedDocId(null);
     initApp();
-  }, []);
+  }, [user?.id, isAuthenticated]);
 
   const fetchDocuments = async () => {
     setLoadingDocuments(true);
@@ -144,11 +153,47 @@ export default function App() {
     showToast('Conversation cleared', 'info');
   };
 
+  // If verifying token, show sleek loading indicator
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0b0f19',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '16px',
+        color: 'var(--text-muted)',
+      }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          border: '3px solid rgba(99, 102, 241, 0.2)',
+          borderTopColor: '#6366f1',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <span style={{ fontSize: '0.88rem' }}>Loading LearnLens Workspace...</span>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // If not authenticated, render production landing & auth page
+  if (!isAuthenticated) {
+    return <LandingPage />;
+  }
+
   const selectedDoc = documents.find((d) => d.id === selectedDocId);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-dark)' }}>
-      {/* Top Navbar */}
+      {/* Top Navbar with User Profile & Private Space */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -261,5 +306,13 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedWorkspace />
+    </AuthProvider>
   );
 }
