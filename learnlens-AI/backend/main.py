@@ -6,12 +6,30 @@ import shutil
 # Prevents mismatched torchvision C++ binaries from crashing sentence-transformers.
 sys.modules["torchvision"] = None
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from database import init_db, get_db, LearningResource, DocumentChunk, Quiz, QuizQuestion, QuizAttempt, StudyPlan
+from database import (
+    init_db,
+    get_db,
+    SessionLocal,
+    User,
+    LearningResource,
+    DocumentChunk,
+    Quiz,
+    QuizQuestion,
+    QuizAttempt,
+    StudyPlan,
+)
+from auth_service import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    get_current_user,
+    ensure_demo_user,
+)
 from document_processor import DocumentProcessor
 from vector_store import VectorStore
 from rag_service import RAGService
@@ -25,8 +43,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(
     title="LearnLens AI - Core Engine",
-    description="Personalized Learning & Learner Analytics System - RAG + Quiz + Analytics API",
-    version="2.0.0",
+    description="Production-Grade Personalized Learning & Analytics System with Multi-User Authentication",
+    version="3.0.0",
 )
 
 # Enable CORS for frontend integration
@@ -41,17 +59,55 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
-    """Initialize database tables and vector extensions on app launch."""
+    """Initialize database tables, vector extensions, and seed demo user on launch."""
     try:
         init_db()
+        db = SessionLocal()
+        ensure_demo_user(db)
+        db.close()
     except Exception as e:
-        print(f"[Startup Warning] DB init issue: {e}")
+        print(f"[Startup Warning] DB init / demo seed issue: {e}")
 
 
 # ============================================================================
 # Pydantic Schemas
 # ============================================================================
 
+# --- Authentication Schemas ---
+class UserSignupRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str
+
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+
+
+class UserProfileResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    created_at: Optional[str] = None
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserProfileResponse
+
+
+# --- Query & RAG Schemas ---
 class QueryRequest(BaseModel):
     question: str
     document_id: Optional[int] = None
@@ -78,6 +134,7 @@ class QueryResponse(BaseModel):
     model_used: str
 
 
+# --- Quiz Schemas ---
 class QuizGenerateRequest(BaseModel):
     document_id: int
     num_questions: Optional[int] = 5
@@ -85,14 +142,15 @@ class QuizGenerateRequest(BaseModel):
 
 
 class QuizSubmitRequest(BaseModel):
-    student_name: Optional[str] = "Student"
+    student_name: Optional[str] = None
     answers: Dict[str, int]  # { "question_id": selected_option_index }
 
 
+# --- Study Plan Schemas ---
 class StudyPlanGenerateRequest(BaseModel):
     document_id: Optional[int] = None
     duration_days: Optional[int] = 5  # 3, 5, 7, 14
-    student_name: Optional[str] = "Student"
+    student_name: Optional[str] = None
     target_exam: Optional[str] = "Comprehensive Mastery"
     focus_topic: Optional[str] = None
 
@@ -102,7 +160,7 @@ class TaskToggleRequest(BaseModel):
 
 
 # ============================================================================
-# Core System Endpoints
+# Core Health & Metadata
 # ============================================================================
 
 @app.get("/")
@@ -111,6 +169,7 @@ def root():
         "system": "LearnLens AI",
         "status": "online",
         "version": "3.0.0",
+        "auth_enabled": True,
         "phases_active": [
             "Phase 1: Grounded RAG Assistance",
             "Phase 2: Quiz System & Learner Analytics",
@@ -126,28 +185,189 @@ def health():
 
 
 # ============================================================================
-# Phase 1: Document Upload & RAG Endpoints
+# Authentication Endpoints (Sign Up, Login, Me, Demo Login)
+# ============================================================================
+
+@app.post("/api/auth/signup", response_model=AuthResponse)
+def signup(req: UserSignupRequest, db: Session = Depends(get_db)):
+    """
+    Registers a new student / learner account with salted bcrypt password.
+    Returns access token and user profile.
+    """
+    email_clean = req.email.strip().lower()
+    name_clean = req.full_name.strip()
+
+    if not name_clean:
+        raise HTTPException(status_code=400, detail="Full name is required.")
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+
+    existing_user = db.query(User).filter(User.email == email_clean).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="An account with this email address already exists. Please log in.",
+        )
+
+    user = User(
+        email=email_clean,
+        full_name=name_clean,
+        hashed_password=hash_password(req.password),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+    }
+
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+def login(req: UserLoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticates a user via email and password.
+    Returns signed JWT access token.
+    """
+    email_clean = req.email.strip().lower()
+    user = db.query(User).filter(User.email == email_clean).first()
+
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password. Please try again.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated.")
+
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+    }
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Checks if an email exists and prepares for password reset.
+    """
+    email_clean = req.email.strip().lower()
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="No account found with this email address.",
+        )
+    return {
+        "success": True,
+        "message": f"Account located for '{email_clean}'. You can now set your new password.",
+        "email": email_clean,
+    }
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Resets the password for a user account with salted bcrypt hashing.
+    """
+    email_clean = req.email.strip().lower()
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email address.")
+
+    user.hashed_password = hash_password(req.new_password)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Password updated successfully. You can now log in with your new password.",
+    }
+
+
+@app.post("/api/auth/demo-login", response_model=AuthResponse)
+def demo_login(db: Session = Depends(get_db)):
+    """
+    Instant 1-click evaluation login for testers and reviewers.
+    Logs into the persistent Alex Morgan demo account.
+    """
+    user = ensure_demo_user(db)
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+    }
+
+
+@app.get("/api/auth/me", response_model=UserProfileResponse)
+def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    """
+    Returns the currently authenticated user's profile.
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+    }
+
+
+# ============================================================================
+# Phase 1: Document Upload & RAG Endpoints (Multi-Tenant Isolated)
 # ============================================================================
 
 @app.post("/api/upload")
 async def upload_document(
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Upload and process a PDF learning resource:
+    Upload and process a PDF learning resource for the authenticated user:
     1. Saves PDF file
     2. Extracts text page-by-page using PyMuPDF
     3. Chunks text with sliding window & overlap
     4. Computes embeddings (384-dim)
-    5. Saves document + chunks + embeddings into PostgreSQL pgvector
+    5. Stores document + chunks + embeddings tagged with current_user.id
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are currently supported.")
 
-    file_title = title if title else os.path.splitext(file.filename)[0]
-    saved_path = os.path.join(UPLOAD_DIR, file.filename)
+    file_title = title.strip() if title and title.strip() else os.path.splitext(file.filename)[0]
+    user_upload_dir = os.path.join(UPLOAD_DIR, f"user_{current_user.id}")
+    os.makedirs(user_upload_dir, exist_ok=True)
+    saved_path = os.path.join(user_upload_dir, file.filename)
 
     with open(saved_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -166,6 +386,7 @@ async def upload_document(
             file_size=file_size,
             page_count=processed_data["page_count"],
             chunks=processed_data["chunks"],
+            user_id=current_user.id,
         )
 
         return {
@@ -185,12 +406,22 @@ async def upload_document(
 
 
 @app.post("/api/query", response_model=QueryResponse)
-def query_rag(req: QueryRequest, db: Session = Depends(get_db)):
+def query_rag(
+    req: QueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
-    Ask a question against indexed documents with page citations.
+    Ask a question against the authenticated user's indexed documents with page citations.
     """
     if not req.question or not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    # If document_id is provided, verify it belongs to this user or is accessible
+    if req.document_id:
+        doc = db.query(LearningResource).filter(LearningResource.id == req.document_id).first()
+        if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+            raise HTTPException(status_code=404, detail="Selected document not found in your workspace.")
 
     store = VectorStore(db)
     rag = RAGService(store)
@@ -200,14 +431,23 @@ def query_rag(req: QueryRequest, db: Session = Depends(get_db)):
         resource_id=req.document_id,
         top_k=req.top_k or 4,
         retrieval_method=req.retrieval_method or "semantic",
+        user_id=current_user.id,
     )
     return result
 
 
 @app.get("/api/documents")
-def list_documents(db: Session = Depends(get_db)):
-    """List all indexed learning resources."""
-    resources = db.query(LearningResource).order_by(LearningResource.id.desc()).all()
+def list_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all learning resources belonging to the authenticated user's workspace."""
+    resources = (
+        db.query(LearningResource)
+        .filter((LearningResource.user_id == current_user.id) | (LearningResource.user_id == None))
+        .order_by(LearningResource.id.desc())
+        .all()
+    )
     return [
         {
             "id": r.id,
@@ -216,7 +456,7 @@ def list_documents(db: Session = Depends(get_db)):
             "page_count": r.page_count,
             "chunk_count": r.chunk_count,
             "file_size": r.file_size,
-            "quiz_count": len(r.quizzes),
+            "quiz_count": len([q for q in r.quizzes if q.user_id == current_user.id or q.user_id is None]),
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in resources
@@ -227,9 +467,14 @@ def list_documents(db: Session = Depends(get_db)):
 def get_document_chunks(
     doc_id: int,
     limit: int = Query(10, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """View chunks of a specific document for inspection."""
+    """View chunks of a specific document for inspection within user's space."""
+    doc = db.query(LearningResource).filter(LearningResource.id == doc_id).first()
+    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Document not found.")
+
     chunks = (
         db.query(DocumentChunk)
         .filter(DocumentChunk.resource_id == doc_id)
@@ -253,10 +498,14 @@ def get_document_chunks(
 
 
 @app.delete("/api/documents/{doc_id}")
-def delete_document(doc_id: int, db: Session = Depends(get_db)):
-    """Delete a document and its chunks."""
+def delete_document(
+    doc_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a document and its chunks belonging to the authenticated user."""
     doc = db.query(LearningResource).filter(LearningResource.id == doc_id).first()
-    if not doc:
+    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Document not found.")
 
     if os.path.exists(doc.file_path):
@@ -271,20 +520,30 @@ def delete_document(doc_id: int, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# Phase 2: Quiz System Endpoints (FR-10, FR-05)
+# Phase 2: Quiz System Endpoints (User-Isolated)
 # ============================================================================
 
 @app.post("/api/quizzes/generate")
-def generate_quiz(req: QuizGenerateRequest, db: Session = Depends(get_db)):
+def generate_quiz(
+    req: QuizGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
-    Auto-generates a topic-tagged multiple choice quiz from a learning resource.
+    Auto-generates a topic-tagged multiple choice quiz from a user's learning resource.
     """
+    # Verify document ownership
+    doc = db.query(LearningResource).filter(LearningResource.id == req.document_id).first()
+    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Document not found.")
+
     quiz_service = QuizService(db)
     try:
         quiz = quiz_service.generate_quiz(
             resource_id=req.document_id,
             num_questions=req.num_questions or 5,
             target_topic=req.topic,
+            user_id=current_user.id,
         )
         return {
             "success": True,
@@ -299,9 +558,17 @@ def generate_quiz(req: QuizGenerateRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/api/quizzes")
-def list_quizzes(document_id: Optional[int] = None, db: Session = Depends(get_db)):
-    """List all generated quizzes."""
-    query = db.query(Quiz).order_by(Quiz.id.desc())
+def list_quizzes(
+    document_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List quizzes belonging to the authenticated user."""
+    query = (
+        db.query(Quiz)
+        .filter((Quiz.user_id == current_user.id) | (Quiz.user_id == None))
+        .order_by(Quiz.id.desc())
+    )
     if document_id:
         query = query.filter(Quiz.resource_id == document_id)
 
@@ -314,7 +581,7 @@ def list_quizzes(document_id: Optional[int] = None, db: Session = Depends(get_db
             "title": q.title,
             "topic": q.topic,
             "question_count": len(q.questions),
-            "attempt_count": len(q.attempts),
+            "attempt_count": len([a for a in q.attempts if a.user_id == current_user.id or a.user_id is None]),
             "created_at": q.created_at.isoformat() if q.created_at else None,
         }
         for q in quizzes
@@ -325,13 +592,14 @@ def list_quizzes(document_id: Optional[int] = None, db: Session = Depends(get_db
 def get_quiz(
     quiz_id: int,
     reveal_answers: bool = Query(False),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Fetch a quiz and its questions. By default, hides correct_index for test-taking.
+    Fetch a quiz and its questions within the user's workspace.
     """
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not quiz:
+    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
     questions = []
@@ -363,18 +631,25 @@ def get_quiz(
 def submit_quiz_attempt(
     quiz_id: int,
     req: QuizSubmitRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Submit and grade a student's quiz attempt. Records attempt history,
-    computes score, and calculates topic accuracy.
+    computes score, and calculates topic accuracy in user's isolated profile.
     """
+    quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Quiz not found.")
+
     quiz_service = QuizService(db)
     try:
+        student_display_name = req.student_name if req.student_name else current_user.full_name
         result = quiz_service.grade_attempt(
             quiz_id=quiz_id,
-            student_name=req.student_name or "Student",
+            student_name=student_display_name,
             user_answers=req.answers,
+            user_id=current_user.id,
         )
         return result
     except Exception as e:
@@ -382,10 +657,14 @@ def submit_quiz_attempt(
 
 
 @app.delete("/api/quizzes/{quiz_id}")
-def delete_quiz(quiz_id: int, db: Session = Depends(get_db)):
-    """Delete a quiz, its questions, and attempt records."""
+def delete_quiz(
+    quiz_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a quiz belonging to the authenticated user."""
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not quiz:
+    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
     db.delete(quiz)
@@ -394,28 +673,35 @@ def delete_quiz(quiz_id: int, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# Phase 2: Learner Analytics & Knowledge Gap Detection (FR-06, FR-07)
+# Phase 2: Learner Analytics & Knowledge Gap Detection (User-Isolated)
 # ============================================================================
 
 @app.get("/api/analytics/overview")
 def get_learner_analytics(
-    student_name: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Returns aggregate learning metrics, per-topic accuracy breakdown,
-    mastery levels, and flags Knowledge Gaps (< 60% accuracy).
+    mastery levels, and flags Knowledge Gaps (< 60% accuracy) for the active user.
     """
     analytics_service = AnalyticsService(db)
-    return analytics_service.get_learner_overview(student_name=student_name)
+    return analytics_service.get_learner_overview(
+        student_name=current_user.full_name,
+        user_id=current_user.id,
+    )
 
 
 # ============================================================================
-# Phase 3: Personalized Study Plans & Recommendation Engine (FR-08, FR-09)
+# Phase 3: Personalized Study Plans & Recommendation Engine (User-Isolated)
 # ============================================================================
 
 @app.post("/api/study-plans/generate")
-def generate_study_plan(req: StudyPlanGenerateRequest, db: Session = Depends(get_db)):
+def generate_study_plan(
+    req: StudyPlanGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Auto-generates a personalized day-by-day study roadmap tailored to the student's
     diagnosed knowledge gaps, target exam timeline, and document content.
@@ -425,9 +711,10 @@ def generate_study_plan(req: StudyPlanGenerateRequest, db: Session = Depends(get
         plan = service.generate_study_plan(
             resource_id=req.document_id,
             duration_days=req.duration_days or 5,
-            student_name=req.student_name or "Student",
+            student_name=req.student_name or current_user.full_name,
             target_exam=req.target_exam or "Comprehensive Mastery",
             focus_topic=req.focus_topic,
+            user_id=current_user.id,
         )
         return service._format_plan_detail(plan)
     except Exception as e:
@@ -436,23 +723,32 @@ def generate_study_plan(req: StudyPlanGenerateRequest, db: Session = Depends(get
 
 @app.get("/api/study-plans")
 def list_study_plans(
-    student_name: Optional[str] = Query(None),
     document_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all personalized study plans."""
+    """List all personalized study plans for the authenticated user."""
     service = StudyPlanService(db)
-    return service.get_study_plans(student_name=student_name, resource_id=document_id)
+    return service.get_study_plans(
+        user_id=current_user.id,
+        student_name=current_user.full_name,
+        resource_id=document_id,
+    )
 
 
 @app.get("/api/study-plans/{plan_id}")
-def get_study_plan(plan_id: int, db: Session = Depends(get_db)):
+def get_study_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Retrieve complete study plan details with days, tasks, and completion status."""
-    service = StudyPlanService(db)
-    plan = service.get_study_plan_by_id(plan_id)
-    if not plan:
+    plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Study plan not found.")
-    return plan
+
+    service = StudyPlanService(db)
+    return service._format_plan_detail(plan)
 
 
 @app.post("/api/study-plans/{plan_id}/tasks/{task_id}/toggle")
@@ -460,19 +756,32 @@ def toggle_study_task(
     plan_id: int,
     task_id: str,
     req: TaskToggleRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Toggle completion status of a specific task in the study plan."""
+    plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Study plan not found.")
+
     service = StudyPlanService(db)
     updated = service.toggle_task_completion(plan_id=plan_id, task_id=task_id, completed=req.completed)
     if not updated:
-        raise HTTPException(status_code=404, detail="Study plan or task not found.")
+        raise HTTPException(status_code=404, detail="Task not found.")
     return updated
 
 
 @app.delete("/api/study-plans/{plan_id}")
-def delete_study_plan(plan_id: int, db: Session = Depends(get_db)):
-    """Delete a study plan."""
+def delete_study_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a study plan belonging to the authenticated user."""
+    plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Study plan not found.")
+
     service = StudyPlanService(db)
     success = service.delete_study_plan(plan_id)
     if not success:
