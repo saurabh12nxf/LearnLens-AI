@@ -10,7 +10,7 @@ from embedding_service import EmbeddingService
 class VectorStore:
     """
     Manages vector storage and retrieval using PostgreSQL + pgvector.
-    Supports both semantic embedding search and keyword baseline retrieval.
+    Supports both semantic embedding search and keyword baseline retrieval with multi-user isolation.
     """
 
     def __init__(self, db: Session):
@@ -25,12 +25,15 @@ class VectorStore:
         file_size: int,
         page_count: int,
         chunks: List[Dict[str, Any]],
+        user_id: Optional[int] = None,
     ) -> LearningResource:
         """
         Stores a document and all its chunks with their embeddings in the database.
+        Associates the resource with user_id for multi-tenant workspace isolation.
         """
         # Create resource record
         resource = LearningResource(
+            user_id=user_id,
             title=title,
             filename=filename,
             file_path=file_path,
@@ -68,54 +71,47 @@ class VectorStore:
         query: str,
         resource_id: Optional[int] = None,
         top_k: int = 4,
+        user_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Performs semantic vector search using pgvector cosine distance (<=>).
         Cosine distance ranges from 0 (identical) to 2 (opposite).
         Similarity = 1.0 - cosine_distance.
+        Isolates results by user_id.
         """
         query_vector = self.embedding_service.get_embedding(query)
         vector_str = "[" + ",".join(str(round(v, 6)) for v in query_vector) + "]"
 
+        where_clauses = []
+        params: Dict[str, Any] = {"vec": vector_str, "top_k": top_k}
+
         if resource_id:
-            sql = text(
-                """
-                SELECT 
-                    dc.id,
-                    dc.resource_id,
-                    dc.chunk_index,
-                    dc.page_number,
-                    dc.chunk_text,
-                    lr.title as document_title,
-                    lr.filename as document_filename,
-                    (1 - (dc.embedding <=> CAST(:vec AS vector))) AS similarity_score
-                FROM document_chunks dc
-                JOIN learning_resources lr ON dc.resource_id = lr.id
-                WHERE dc.resource_id = :resource_id
-                ORDER BY dc.embedding <=> CAST(:vec AS vector)
-                LIMIT :top_k;
-                """
-            )
-            params = {"vec": vector_str, "resource_id": resource_id, "top_k": top_k}
-        else:
-            sql = text(
-                """
-                SELECT 
-                    dc.id,
-                    dc.resource_id,
-                    dc.chunk_index,
-                    dc.page_number,
-                    dc.chunk_text,
-                    lr.title as document_title,
-                    lr.filename as document_filename,
-                    (1 - (dc.embedding <=> CAST(:vec AS vector))) AS similarity_score
-                FROM document_chunks dc
-                JOIN learning_resources lr ON dc.resource_id = lr.id
-                ORDER BY dc.embedding <=> CAST(:vec AS vector)
-                LIMIT :top_k;
-                """
-            )
-            params = {"vec": vector_str, "top_k": top_k}
+            where_clauses.append("dc.resource_id = :resource_id")
+            params["resource_id"] = resource_id
+        elif user_id:
+            where_clauses.append("(lr.user_id = :user_id OR lr.user_id IS NULL)")
+            params["user_id"] = user_id
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        sql = text(
+            f"""
+            SELECT 
+                dc.id,
+                dc.resource_id,
+                dc.chunk_index,
+                dc.page_number,
+                dc.chunk_text,
+                lr.title as document_title,
+                lr.filename as document_filename,
+                (1 - (dc.embedding <=> CAST(:vec AS vector))) AS similarity_score
+            FROM document_chunks dc
+            JOIN learning_resources lr ON dc.resource_id = lr.id
+            {where_sql}
+            ORDER BY dc.embedding <=> CAST(:vec AS vector)
+            LIMIT :top_k;
+            """
+        )
 
         result = self.db.execute(sql, params)
         rows = result.fetchall()
@@ -141,6 +137,7 @@ class VectorStore:
         query: str,
         resource_id: Optional[int] = None,
         top_k: int = 4,
+        user_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Baseline lexical retrieval using PostgreSQL text search / ILIKE word matching.
@@ -171,6 +168,9 @@ class VectorStore:
         if resource_id:
             base_sql += " AND dc.resource_id = :resource_id"
             params["resource_id"] = resource_id
+        elif user_id:
+            base_sql += " AND (lr.user_id = :user_id OR lr.user_id IS NULL)"
+            params["user_id"] = user_id
 
         base_sql += " LIMIT :top_k;"
         params["top_k"] = top_k
@@ -179,11 +179,9 @@ class VectorStore:
         rows = result.fetchall()
 
         matched_chunks = []
-        for row in rows:
-            # Simple keyword overlap scoring for baseline
-            overlap = sum(1 for w in words if w in row.chunk_text.lower())
-            score = round(overlap / max(len(words), 1), 4)
-
+        for idx, row in enumerate(rows):
+            # Keyword baseline proxy score based on rank position
+            sim_score = max(0.1, round(1.0 - (idx * 0.15), 4))
             matched_chunks.append({
                 "chunk_id": row.id,
                 "resource_id": row.resource_id,
@@ -192,10 +190,8 @@ class VectorStore:
                 "chunk_index": row.chunk_index,
                 "page_number": row.page_number,
                 "text": row.chunk_text,
-                "similarity_score": score,
+                "similarity_score": sim_score,
                 "retrieval_method": "keyword_baseline",
             })
 
-        # Sort by overlap score descending
-        matched_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
         return matched_chunks

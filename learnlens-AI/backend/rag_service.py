@@ -37,6 +37,7 @@ class RAGService:
         resource_id: Optional[int] = None,
         top_k: int = 4,
         retrieval_method: str = "semantic",
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Executes the full RAG pipeline:
@@ -51,12 +52,14 @@ class RAGService:
                 query=question,
                 resource_id=resource_id,
                 top_k=top_k,
+                user_id=user_id,
             )
         else:
             retrieved_chunks = self.vector_store.search_semantic(
                 query=question,
                 resource_id=resource_id,
                 top_k=top_k,
+                user_id=user_id,
             )
 
         if not retrieved_chunks:

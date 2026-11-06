@@ -36,6 +36,7 @@ class QuizService:
         resource_id: int,
         num_questions: int = 5,
         target_topic: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Quiz:
         """
         Generates and saves a new Quiz with MCQ questions extracted from the resource.
@@ -74,6 +75,7 @@ class QuizService:
         # Save Quiz to Database
         quiz_title = quiz_data.get("title", f"{doc.title} Practice Quiz")
         quiz = Quiz(
+            user_id=user_id,
             resource_id=doc.id,
             title=quiz_title,
             topic=target_topic or quiz_data.get("topic", "General Assessment"),
@@ -251,6 +253,7 @@ JSON SCHEMA:
         quiz_id: int,
         student_name: str,
         user_answers: Dict[int, int],  # {question_id: selected_index}
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Evaluates a submitted quiz attempt, updates attempt records,
@@ -295,6 +298,7 @@ JSON SCHEMA:
 
         # Save attempt to DB
         attempt = QuizAttempt(
+            user_id=user_id,
             quiz_id=quiz.id,
             student_name=student_name or "Student",
             score=score,

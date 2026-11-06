@@ -15,13 +15,20 @@ class AnalyticsService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_learner_overview(self, student_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_learner_overview(
+        self,
+        student_name: Optional[str] = None,
+        user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Computes aggregate metrics, topic-wise accuracy, mastery tiers,
         and automatically flags Knowledge Gaps (< 60% accuracy).
+        Isolates records by user_id for multi-tenant accounts.
         """
         query = self.db.query(QuizAttempt)
-        if student_name:
+        if user_id:
+            query = query.filter(QuizAttempt.user_id == user_id)
+        elif student_name:
             query = query.filter(QuizAttempt.student_name == student_name)
 
         attempts = query.order_by(QuizAttempt.created_at.desc()).all()

@@ -44,23 +44,30 @@ class StudyPlanService:
         student_name: str = "Student",
         target_exam: str = "Comprehensive Mastery",
         focus_topic: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> StudyPlan:
         """
         Creates an adaptive study plan tailored to the student's weaknesses
         and target timeframe.
         """
         # 1. Fetch Learner Analytics & Knowledge Gaps
-        overview = self.analytics_service.get_learner_overview(student_name=student_name)
+        overview = self.analytics_service.get_learner_overview(student_name=student_name, user_id=user_id)
         knowledge_gaps = overview.get("knowledge_gaps", [])
         topic_mastery = overview.get("topic_mastery", [])
 
         # 2. Identify Target Learning Resource
         resource = None
         if resource_id:
-            resource = self.db.query(LearningResource).filter(LearningResource.id == resource_id).first()
+            query = self.db.query(LearningResource).filter(LearningResource.id == resource_id)
+            if user_id:
+                query = query.filter((LearningResource.user_id == user_id) | (LearningResource.user_id == None))
+            resource = query.first()
         if not resource:
-            # Fall back to latest uploaded resource
-            resource = self.db.query(LearningResource).order_by(LearningResource.id.desc()).first()
+            # Fall back to latest uploaded resource for this user
+            res_query = self.db.query(LearningResource)
+            if user_id:
+                res_query = res_query.filter((LearningResource.user_id == user_id) | (LearningResource.user_id == None))
+            resource = res_query.order_by(LearningResource.id.desc()).first()
 
         doc_title = resource.title if resource else "Study Course"
 
@@ -131,6 +138,7 @@ class StudyPlanService:
         # 6. Save Study Plan to Database
         title = plan_data.get("title", f"{duration_days}-Day {target_exam} Roadmap")
         study_plan = StudyPlan(
+            user_id=user_id,
             resource_id=resource.id if resource else None,
             student_name=student_name or "Student",
             title=title,
@@ -356,10 +364,13 @@ JSON SCHEMA:
         self,
         student_name: Optional[str] = None,
         resource_id: Optional[int] = None,
+        user_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Lists all study plans with their completion metrics."""
         query = self.db.query(StudyPlan).order_by(StudyPlan.id.desc())
-        if student_name:
+        if user_id:
+            query = query.filter(StudyPlan.user_id == user_id)
+        elif student_name:
             query = query.filter(StudyPlan.student_name == student_name)
         if resource_id:
             query = query.filter(StudyPlan.resource_id == resource_id)
