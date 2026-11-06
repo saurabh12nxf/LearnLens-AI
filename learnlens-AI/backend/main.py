@@ -37,8 +37,11 @@ from quiz_service import QuizService
 from analytics_service import AnalyticsService
 from study_plan_service import StudyPlanService
 
-# Upload directory
-UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "uploads"))
+# Upload directory (supports Vercel serverless /tmp environment)
+if os.getenv("VERCEL"):
+    UPLOAD_DIR = "/tmp/uploads"
+else:
+    UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(

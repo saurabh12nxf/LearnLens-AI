@@ -261,8 +261,6 @@ PyYAML==6.0.2
 pyzmq==27.1.0
 qtconsole==5.7.1
 QtPy==2.4.3
-# Editable install with no version control (questai-backend==0.1.0)
--e c:\users\hp\desktop\questai\backend
 RapidFuzz==3.14.3
 redis==8.0.1
 referencing==0.36.2
