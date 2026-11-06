@@ -2,7 +2,6 @@
 name = "learnlens-backend"
 version = "0.1.0"
 description = "LearnLens AI Backend API"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.100.0",
@@ -21,6 +20,5 @@ dependencies = [
     "numpy>=1.25.0",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv]
+package = false
