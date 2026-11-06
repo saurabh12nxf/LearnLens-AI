@@ -6,12 +6,16 @@ import shutil
 # Prevents mismatched torchvision C++ binaries from crashing sentence-transformers.
 sys.modules["torchvision"] = None
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query, status
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Query, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, DatabaseError
 
 from database import (
+    engine,
     init_db,
     get_db,
     SessionLocal,
@@ -58,6 +62,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(OperationalError)
+@app.exception_handler(DatabaseError)
+async def db_connection_exception_handler(request: Request, exc: Exception):
+    """
+    Catches unreachable PostgreSQL errors (common when DATABASE_URL is not set on Vercel).
+    Returns actionable guidance instead of a raw 500.
+    """
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Database unreachable. If running on Vercel, please add your remote PostgreSQL "
+                "connection string (e.g., from Neon.tech or Supabase) to Vercel Project Settings -> "
+                "Environment Variables as DATABASE_URL."
+            )
+        },
+    )
 
 
 @app.on_event("startup")
@@ -183,8 +206,36 @@ def root():
 
 
 @app.get("/health")
+@app.get("/api/health")
 def health():
-    return {"status": "healthy"}
+    db_connected = False
+    db_error = None
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1;"))
+        db_connected = True
+    except Exception as e:
+        db_error = str(e)
+
+    groq_set = bool(
+        os.getenv("GROQ_API_KEY")
+        and os.getenv("GROQ_API_KEY").strip() not in ["your_groq_api_key_here", ""]
+    )
+
+    db_url_configured = os.getenv("DATABASE_URL") is not None
+    is_localhost = "localhost" in os.getenv("DATABASE_URL", "localhost")
+
+    return {
+        "status": "healthy" if db_connected else "degraded",
+        "database": {
+            "connected": db_connected,
+            "configured": db_url_configured,
+            "points_to_localhost": is_localhost,
+            "error": db_error,
+        },
+        "groq_configured": groq_set,
+        "environment": "vercel" if os.getenv("VERCEL") else "local",
+    }
 
 
 # ============================================================================
