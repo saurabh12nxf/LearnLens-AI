@@ -209,7 +209,7 @@ export default function ChatWorkspace({
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '24px 32px',
+        padding: '20px 32px 24px',
         display: 'flex',
         flexDirection: 'column',
         gap: '24px',
@@ -218,9 +218,9 @@ export default function ChatWorkspace({
           /* Empty State: Student-Centric Welcome Hero Banner */
           <div style={{
             maxWidth: '740px',
-            margin: 'auto',
+            margin: '0 auto',
             textAlign: 'center',
-            padding: '24px 16px',
+            padding: '16px 16px 24px',
           }} className="animate-fade-in">
             {/* Glow Icon */}
             <div style={{
