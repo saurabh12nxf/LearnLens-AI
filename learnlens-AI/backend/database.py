@@ -8,6 +8,7 @@ from sqlalchemy import (
     String,
     Text,
     Float,
+    Boolean,
     DateTime,
     ForeignKey,
     JSON,
@@ -28,10 +29,61 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+# ============================================================================
+# User & Authentication Model (Production-Grade Multi-Tenant Isolation)
+# ============================================================================
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships - each user owns their dedicated learning space
+    resources = relationship(
+        "LearningResource",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="LearningResource.id.desc()",
+    )
+    quizzes = relationship(
+        "Quiz",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="Quiz.id.desc()",
+    )
+    attempts = relationship(
+        "QuizAttempt",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="QuizAttempt.created_at.desc()",
+    )
+    study_plans = relationship(
+        "StudyPlan",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="StudyPlan.id.desc()",
+    )
+
+
+# ============================================================================
+# Phase 1: Document & Chunk Models
+# ============================================================================
+
 class LearningResource(Base):
     __tablename__ = "learning_resources"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String(255), nullable=False)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
@@ -41,6 +93,7 @@ class LearningResource(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
+    user = relationship("User", back_populates="resources")
     chunks = relationship(
         "DocumentChunk",
         back_populates="resource",
@@ -88,6 +141,12 @@ class Quiz(Base):
     __tablename__ = "quizzes"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     resource_id = Column(
         Integer,
         ForeignKey("learning_resources.id", ondelete="CASCADE"),
@@ -99,6 +158,7 @@ class Quiz(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
+    user = relationship("User", back_populates="quizzes")
     resource = relationship("LearningResource", back_populates="quizzes")
     questions = relationship(
         "QuizQuestion",
@@ -138,6 +198,12 @@ class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     quiz_id = Column(
         Integer,
         ForeignKey("quizzes.id", ondelete="CASCADE"),
@@ -152,6 +218,7 @@ class QuizAttempt(Base):
     topic_results = Column(JSON, nullable=True)  # {"TopicName": {"correct": X, "total": Y}}
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    user = relationship("User", back_populates="attempts")
     quiz = relationship("Quiz", back_populates="attempts")
 
 
@@ -163,6 +230,12 @@ class StudyPlan(Base):
     __tablename__ = "study_plans"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     resource_id = Column(
         Integer,
         ForeignKey("learning_resources.id", ondelete="CASCADE"),
@@ -180,16 +253,38 @@ class StudyPlan(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    user = relationship("User", back_populates="study_plans")
     resource = relationship("LearningResource", back_populates="study_plans")
 
 
 def init_db():
-    """Ensure pgvector extension exists and create all tables."""
+    """Ensure pgvector extension exists, create all tables, and ensure user_id migration."""
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.commit()
+
+    # Create tables (creates users table if not exists)
     Base.metadata.create_all(bind=engine)
-    print("Database tables initialized with pgvector, Phase 2 Quiz models, and Phase 3 Study Plans.")
+
+    # Ensure user_id column exists on existing tables for smooth migration
+    with engine.connect() as conn:
+        tables_to_migrate = ["learning_resources", "quizzes", "quiz_attempts", "study_plans"]
+        for tbl in tables_to_migrate:
+            migration_sql = text(f"""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='{tbl}' AND column_name='user_id'
+                    ) THEN
+                        ALTER TABLE {tbl} ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+                    END IF;
+                END $$;
+            """)
+            conn.execute(migration_sql)
+        conn.commit()
+
+    print("Database tables initialized with Users, pgvector, Quizzes, Analytics, and Study Plans.")
 
 
 def get_db():
