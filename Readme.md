@@ -151,5 +151,14 @@ The frontend will be available at `http://localhost:5173` and connected to the b
 
 ---
 
+## 🚀 Deployment (Vercel Multi-Service)
+
+LearnLens AI is configured for one-click deployment on Vercel as a multi-service monorepo:
+- **Frontend Service**: Vite React Single Page Application (`/(.*)`).
+- **Backend Service**: FastAPI backend (`/api/(.*)`, `/health(.*)`, `/docs(.*)`).
+- **Embedding Engine**: FastEmbed ONNX Runtime for serverless vector embeddings.
+
+---
+
 ## 📄 License
 MIT License. Built for personalized, data-driven learning.
