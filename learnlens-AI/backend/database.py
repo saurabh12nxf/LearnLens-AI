@@ -25,9 +25,11 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/learnlens_dev",
 )
 
-# Standardize postgres:// prefix to postgresql:// for SQLAlchemy compatibility
+# Standardize URL prefix and explicitly specify the installed psycopg2 driver
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 # Use NullPool in serverless environments (Vercel) to prevent frozen connection socket crashes
 if os.getenv("VERCEL"):
