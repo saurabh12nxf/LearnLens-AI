@@ -25,6 +25,10 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/learnlens_dev",
 )
 
+# Standardize postgres:// prefix to postgresql:// for SQLAlchemy compatibility
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Use NullPool in serverless environments (Vercel) to prevent frozen connection socket crashes
 if os.getenv("VERCEL"):
     engine = create_engine(

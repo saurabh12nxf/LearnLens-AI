@@ -35,12 +35,6 @@ from auth_service import (
     get_current_user,
     ensure_demo_user,
 )
-from document_processor import DocumentProcessor
-from vector_store import VectorStore
-from rag_service import RAGService
-from quiz_service import QuizService
-from analytics_service import AnalyticsService
-from study_plan_service import StudyPlanService
 
 # Upload directory (supports Vercel serverless /tmp environment)
 if os.getenv("VERCEL"):
@@ -222,6 +216,16 @@ def root():
             "Phase 3: Personalized Study Plans & Recommendation Engine"
         ],
         "docs_url": "/docs",
+    }
+
+
+@app.get("/api/ping")
+def ping():
+    return {
+        "status": "pong",
+        "service": "backend",
+        "python": sys.version,
+        "environment": "vercel" if os.getenv("VERCEL") else "local",
     }
 
 
@@ -465,6 +469,8 @@ async def upload_document(
     file_size = os.path.getsize(saved_path)
 
     try:
+        from document_processor import DocumentProcessor
+        from vector_store import VectorStore
         processor = DocumentProcessor(chunk_size=512, chunk_overlap=50)
         processed_data = processor.process_pdf(saved_path)
 
@@ -512,6 +518,9 @@ def query_rag(
         doc = db.query(LearningResource).filter(LearningResource.id == req.document_id).first()
         if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
             raise HTTPException(status_code=404, detail="Selected document not found in your workspace.")
+
+    from vector_store import VectorStore
+    from rag_service import RAGService
 
     store = VectorStore(db)
     rag = RAGService(store)
@@ -627,6 +636,7 @@ def generate_quiz(
     if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Document not found.")
 
+    from quiz_service import QuizService
     quiz_service = QuizService(db)
     try:
         quiz = quiz_service.generate_quiz(
@@ -732,6 +742,7 @@ def submit_quiz_attempt(
     if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
+    from quiz_service import QuizService
     quiz_service = QuizService(db)
     try:
         student_display_name = req.student_name if req.student_name else current_user.full_name
@@ -775,6 +786,7 @@ def get_learner_analytics(
     Returns aggregate learning metrics, per-topic accuracy breakdown,
     mastery levels, and flags Knowledge Gaps (< 60% accuracy) for the active user.
     """
+    from analytics_service import AnalyticsService
     analytics_service = AnalyticsService(db)
     return analytics_service.get_learner_overview(
         student_name=current_user.full_name,
@@ -796,6 +808,7 @@ def generate_study_plan(
     Auto-generates a personalized day-by-day study roadmap tailored to the student's
     diagnosed knowledge gaps, target exam timeline, and document content.
     """
+    from study_plan_service import StudyPlanService
     service = StudyPlanService(db)
     try:
         plan = service.generate_study_plan(
@@ -818,6 +831,7 @@ def list_study_plans(
     db: Session = Depends(get_db),
 ):
     """List all personalized study plans for the authenticated user."""
+    from study_plan_service import StudyPlanService
     service = StudyPlanService(db)
     return service.get_study_plans(
         user_id=current_user.id,
@@ -837,6 +851,7 @@ def get_study_plan(
     if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
+    from study_plan_service import StudyPlanService
     service = StudyPlanService(db)
     return service._format_plan_detail(plan)
 
@@ -854,6 +869,7 @@ def toggle_study_task(
     if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
+    from study_plan_service import StudyPlanService
     service = StudyPlanService(db)
     updated = service.toggle_task_completion(plan_id=plan_id, task_id=task_id, completed=req.completed)
     if not updated:
@@ -872,6 +888,7 @@ def delete_study_plan(
     if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
+    from study_plan_service import StudyPlanService
     service = StudyPlanService(db)
     success = service.delete_study_plan(plan_id)
     if not success:
