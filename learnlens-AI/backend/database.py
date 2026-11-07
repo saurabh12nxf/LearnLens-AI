@@ -15,6 +15,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.pool import NullPool
 from pgvector.sqlalchemy import Vector
 
 load_dotenv()
@@ -24,12 +25,21 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/learnlens_dev",
 )
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    echo=False,
-)
+# Use NullPool in serverless environments (Vercel) to prevent frozen connection socket crashes
+if os.getenv("VERCEL"):
+    engine = create_engine(
+        DATABASE_URL,
+        poolclass=NullPool,
+        echo=False,
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=False,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -3,7 +3,8 @@
   "services": {
     "backend": {
       "root": "learnlens-AI/backend",
-      "framework": "fastapi"
+      "framework": "fastapi",
+      "entrypoint": "main.py"
     },
     "frontend": {
       "root": "learnlens-AI/frontend",

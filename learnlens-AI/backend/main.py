@@ -104,13 +104,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 def on_startup():
     """Initialize database tables, vector extensions, and seed demo user on launch."""
-    try:
-        init_db()
-        db = SessionLocal()
-        ensure_demo_user(db)
-        db.close()
-    except Exception as e:
-        print(f"[Startup Warning] DB init / demo seed issue: {e}")
+    # Only run full DDL schema migration in local environments to prevent Vercel cold-start timeouts
+    if not os.getenv("VERCEL"):
+        try:
+            init_db()
+            db = SessionLocal()
+            ensure_demo_user(db)
+            db.close()
+        except Exception as e:
+            print(f"[Startup Warning] DB init / demo seed issue: {e}")
 
 
 # ============================================================================
