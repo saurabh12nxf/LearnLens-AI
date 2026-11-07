@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configure serverless-safe writable cache directory on Vercel
+if os.getenv("VERCEL"):
+    os.environ.setdefault("FASTEMBED_CACHE_DIR", "/tmp/fastembed_cache")
+    os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+
 DEFAULT_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 

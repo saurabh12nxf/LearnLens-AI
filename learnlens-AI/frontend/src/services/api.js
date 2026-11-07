@@ -35,6 +35,25 @@ window.fetch = async (input, init = {}) => {
   return response;
 };
 
+// Helper to reliably parse error message without stream-already-read issues
+async function parseErrorResponse(res) {
+  let detail = `Error ${res.status}`;
+  try {
+    const raw = await res.text();
+    if (raw) {
+      try {
+        const json = JSON.parse(raw);
+        detail = json.detail || json.message || raw;
+      } catch {
+        // Strip HTML tags if Vercel returned an HTML error page
+        const stripped = raw.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+        detail = stripped.length > 200 ? stripped.slice(0, 200) + '...' : stripped;
+      }
+    }
+  } catch {}
+  return detail;
+}
+
 export const api = {
   getToken: () => localStorage.getItem(TOKEN_KEY),
   setToken: (token) => localStorage.setItem(TOKEN_KEY, token),
@@ -56,17 +75,8 @@ export const api = {
   async get(endpoint) {
     const res = await window.fetch(endpoint);
     if (!res.ok) {
-      let detail = `Error ${res.status}`;
-      try {
-        const err = await res.json();
-        detail = err.detail || err.message || JSON.stringify(err);
-      } catch {
-        try {
-          const text = await res.text();
-          if (text) detail = text.slice(0, 200);
-        } catch {}
-      }
-      throw new Error(detail);
+      const err = await parseErrorResponse(res);
+      throw new Error(err);
     }
     return res.json();
   },
@@ -78,17 +88,8 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      let detail = `Error ${res.status}`;
-      try {
-        const err = await res.json();
-        detail = err.detail || err.message || JSON.stringify(err);
-      } catch {
-        try {
-          const text = await res.text();
-          if (text) detail = text.slice(0, 200);
-        } catch {}
-      }
-      throw new Error(detail);
+      const err = await parseErrorResponse(res);
+      throw new Error(err);
     }
     return res.json();
   },
@@ -99,17 +100,8 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
-      let detail = `Error ${res.status}`;
-      try {
-        const err = await res.json();
-        detail = err.detail || err.message || JSON.stringify(err);
-      } catch {
-        try {
-          const text = await res.text();
-          if (text) detail = text.slice(0, 200);
-        } catch {}
-      }
-      throw new Error(detail);
+      const err = await parseErrorResponse(res);
+      throw new Error(err);
     }
     return res.json();
   },
@@ -119,17 +111,8 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) {
-      let detail = `Error ${res.status}`;
-      try {
-        const err = await res.json();
-        detail = err.detail || err.message || JSON.stringify(err);
-      } catch {
-        try {
-          const text = await res.text();
-          if (text) detail = text.slice(0, 200);
-        } catch {}
-      }
-      throw new Error(detail);
+      const err = await parseErrorResponse(res);
+      throw new Error(err);
     }
     return res.json();
   },
