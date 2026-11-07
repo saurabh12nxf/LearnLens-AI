@@ -72,14 +72,31 @@ async def db_connection_exception_handler(request: Request, exc: Exception):
     Catches unreachable PostgreSQL errors (common when DATABASE_URL is not set on Vercel).
     Returns actionable guidance instead of a raw 500.
     """
+    err_str = str(exc)
     return JSONResponse(
         status_code=503,
         content={
             "detail": (
-                "Database unreachable. If running on Vercel, please add your remote PostgreSQL "
-                "connection string (e.g., from Neon.tech or Supabase) to Vercel Project Settings -> "
-                "Environment Variables as DATABASE_URL."
+                f"Database connection error: {err_str[:200]}. "
+                "Please verify your remote PostgreSQL DATABASE_URL in Vercel Project Settings."
             )
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global catch-all exception handler to surface explicit error details to frontend.
+    """
+    err_name = type(exc).__name__
+    err_str = str(exc)
+    print(f"[Server Error] {request.method} {request.url.path}: {err_name} - {err_str}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"{err_name}: {err_str}" if err_str else f"Unhandled Server Error ({err_name})",
+            "error_type": err_name,
         },
     )
 
@@ -249,45 +266,51 @@ def signup(req: UserSignupRequest, db: Session = Depends(get_db)):
     Registers a new student / learner account with salted bcrypt password.
     Returns access token and user profile.
     """
-    email_clean = req.email.strip().lower()
-    name_clean = req.full_name.strip()
+    try:
+        email_clean = req.email.strip().lower()
+        name_clean = req.full_name.strip()
 
-    if not name_clean:
-        raise HTTPException(status_code=400, detail="Full name is required.")
-    if not email_clean or "@" not in email_clean:
-        raise HTTPException(status_code=400, detail="A valid email address is required.")
-    if len(req.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+        if not name_clean:
+            raise HTTPException(status_code=400, detail="Full name is required.")
+        if not email_clean or "@" not in email_clean:
+            raise HTTPException(status_code=400, detail="A valid email address is required.")
+        if len(req.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
 
-    existing_user = db.query(User).filter(User.email == email_clean).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="An account with this email address already exists. Please log in.",
+        existing_user = db.query(User).filter(User.email == email_clean).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="An account with this email address already exists. Please log in.",
+            )
+
+        user = User(
+            email=email_clean,
+            full_name=name_clean,
+            hashed_password=hash_password(req.password),
+            is_active=True,
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
-    user = User(
-        email=email_clean,
-        full_name=name_clean,
-        hashed_password=hash_password(req.password),
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+        token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
-    token = create_access_token(data={"sub": str(user.id), "email": user.email})
-
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        },
-    }
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Signup Error] {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Signup failed: {type(e).__name__} - {str(e)}")
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)
@@ -296,30 +319,36 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
     Authenticates a user via email and password.
     Returns signed JWT access token.
     """
-    email_clean = req.email.strip().lower()
-    user = db.query(User).filter(User.email == email_clean).first()
+    try:
+        email_clean = req.email.strip().lower()
+        user = db.query(User).filter(User.email == email_clean).first()
 
-    if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password. Please try again.",
-        )
+        if not user or not verify_password(req.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password. Please try again.",
+            )
 
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account is deactivated.")
+        if not user.is_active:
+            raise HTTPException(status_code=403, detail="Account is deactivated.")
 
-    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+        token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        },
-    }
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Login Error] {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Login failed: {type(e).__name__} - {str(e)}")
 
 
 @app.post("/api/auth/forgot-password")
@@ -369,19 +398,23 @@ def demo_login(db: Session = Depends(get_db)):
     Instant 1-click evaluation login for testers and reviewers.
     Logs into the persistent Alex Morgan demo account.
     """
-    user = ensure_demo_user(db)
-    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    try:
+        user = ensure_demo_user(db)
+        token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        },
-    }
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            },
+        }
+    except Exception as e:
+        print(f"[Demo Login Error] {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Demo login failed: {type(e).__name__} - {str(e)}")
 
 
 @app.get("/api/auth/me", response_model=UserProfileResponse)

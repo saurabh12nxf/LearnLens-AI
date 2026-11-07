@@ -56,8 +56,17 @@ export const api = {
   async get(endpoint) {
     const res = await window.fetch(endpoint);
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(err.detail || `Error ${res.status}`);
+      let detail = `Error ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err.detail || err.message || JSON.stringify(err);
+      } catch {
+        try {
+          const text = await res.text();
+          if (text) detail = text.slice(0, 200);
+        } catch {}
+      }
+      throw new Error(detail);
     }
     return res.json();
   },
@@ -69,8 +78,17 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(err.detail || `Error ${res.status}`);
+      let detail = `Error ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err.detail || err.message || JSON.stringify(err);
+      } catch {
+        try {
+          const text = await res.text();
+          if (text) detail = text.slice(0, 200);
+        } catch {}
+      }
+      throw new Error(detail);
     }
     return res.json();
   },
@@ -81,8 +99,17 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(err.detail || `Error ${res.status}`);
+      let detail = `Error ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err.detail || err.message || JSON.stringify(err);
+      } catch {
+        try {
+          const text = await res.text();
+          if (text) detail = text.slice(0, 200);
+        } catch {}
+      }
+      throw new Error(detail);
     }
     return res.json();
   },
@@ -92,8 +119,17 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(err.detail || `Error ${res.status}`);
+      let detail = `Error ${res.status}`;
+      try {
+        const err = await res.json();
+        detail = err.detail || err.message || JSON.stringify(err);
+      } catch {
+        try {
+          const text = await res.text();
+          if (text) detail = text.slice(0, 200);
+        } catch {}
+      }
+      throw new Error(detail);
     }
     return res.json();
   },
