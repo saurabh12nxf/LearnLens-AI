@@ -151,7 +151,10 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    new_password: str
+    new_password: Optional[str] = None
+    newPassword: Optional[str] = None
+    confirm_password: Optional[str] = None
+    confirmPassword: Optional[str] = None
     reset_token: Optional[str] = None
     email: Optional[str] = None
 
@@ -407,7 +410,8 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     Resets the password for a user account using a verified token or valid email.
     Enforces modern industry standard: prevents reusing the existing password.
     """
-    if len(req.new_password) < 6:
+    effective_password = req.new_password or req.newPassword
+    if not effective_password or len(effective_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
 
     target_email = None
@@ -433,13 +437,13 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No account found with this email address.")
 
     # Industry standard security check: New password cannot be the same as current password
-    if verify_password(req.new_password, user.hashed_password):
+    if verify_password(effective_password, user.hashed_password):
         raise HTTPException(
             status_code=400,
             detail="New password cannot be the same as your current password. Please choose a different password.",
         )
 
-    user.hashed_password = hash_password(req.new_password)
+    user.hashed_password = hash_password(effective_password)
     db.commit()
 
     return {

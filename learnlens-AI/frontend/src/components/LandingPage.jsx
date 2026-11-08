@@ -140,6 +140,9 @@ export default function LandingPage() {
         reset_token: resetToken,
         email: emailTrimmed,
         new_password: formData.newPassword,
+        newPassword: formData.newPassword,
+        confirm_password: formData.confirmNewPassword,
+        confirmPassword: formData.confirmNewPassword,
       });
 
       setSuccessMessage(res.message || 'Password updated successfully! You can now sign in.');
