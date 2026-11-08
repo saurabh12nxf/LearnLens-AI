@@ -39,3 +39,4 @@ This document reconstructs the architectural evolution of LearnLens AI across it
 
 5. **Keep React 18 + Vite**:
    - Fast client-side rendering with Tailwind CSS dark UI and responsive state management.
+

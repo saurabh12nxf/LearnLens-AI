@@ -73,3 +73,4 @@ sequenceDiagram
 > "LearnLens AI includes a **grounded deterministic fallback generator**:
 > - For quizzes: it extracts key sentences and page numbers directly from the uploaded document chunks, creating verified reading comprehension questions.
 > - For study plans: it generates a structured review roadmap grounded in the actual document content without inventing non-existent citations."
+

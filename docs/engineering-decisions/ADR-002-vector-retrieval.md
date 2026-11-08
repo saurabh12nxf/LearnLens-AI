@@ -19,3 +19,4 @@ We chose **PostgreSQL 16 with the `pgvector` extension** hosted on Neon Cloud, u
 ## Consequences
 - **Security**: Cross-tenant data leakage is prevented directly in SQL (`WHERE lr.user_id = :user_id`).
 - **Performance**: HNSW index guarantees logarithmic $O(\log N)$ search latency even as the document chunk corpus scales.
+

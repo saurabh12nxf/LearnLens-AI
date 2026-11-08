@@ -16,3 +16,4 @@ We migrated the primary embedding engine to **FastEmbed** using the ONNX Runtime
 
 ### Disadvantages:
 - ONNX models cannot be fine-tuned directly on GPU within the serverless environment; fine-tuning must be performed offline.
+

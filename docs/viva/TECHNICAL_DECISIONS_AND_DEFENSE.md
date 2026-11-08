@@ -94,3 +94,4 @@ This guide prepares you to explain and defend every major architectural and tech
 > 1. **Database Dialect Mismatch**: SQLAlchemy on Python 3.12 defaulted to the `psycopg` (v3) dialect because the connection string began with `postgresql://`. The serverless environment did not have `psycopg` installed, causing `ModuleNotFoundError: No module named 'psycopg'`. We explicitly pinned the connection URI to `postgresql+psycopg2://` and bundled `psycopg[binary]`.
 > 2. **Stale Connection Sockets**: Default connection pooling (`QueuePool`) held open TCP sockets that froze during serverless dormancy. We configured `NullPool` for serverless environments, establishing clean stateless connections.
 > 3. **Eager Import Cold Starts**: We deferred heavy ML and PDF parsing imports to endpoint invocation time, cutting cold-start times from 14s to < 600ms."
+

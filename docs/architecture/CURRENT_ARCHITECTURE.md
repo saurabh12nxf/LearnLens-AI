@@ -193,3 +193,4 @@ erDiagram
 - `POST /api/study-plans/generate`: Synthesize weak topics into a multi-day study plan.
 - `GET /api/study-plans`: Retrieve active study plans.
 - `PATCH /api/study-plans/{plan_id}/tasks/{task_id}`: Toggle task completion status.
+

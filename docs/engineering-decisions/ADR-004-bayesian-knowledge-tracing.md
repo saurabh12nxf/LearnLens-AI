@@ -28,3 +28,4 @@ We introduced the standard 4-parameter **Corbett & Anderson Bayesian Knowledge T
 ## Consequences
 - Tracks true cognitive mastery over time rather than just counting correct answers.
 - Seamlessly backward-compatible: exposes `bkt_mastery_percentage` and `predicted_next_success_prob` while preserving existing response contracts.
+

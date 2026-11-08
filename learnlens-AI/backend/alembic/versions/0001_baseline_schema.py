@@ -158,3 +158,4 @@ def downgrade() -> None:
     op.drop_table('document_chunks')
     op.drop_table('learning_resources')
     op.drop_table('users')
+

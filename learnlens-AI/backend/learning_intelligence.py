@@ -204,3 +204,4 @@ class LearningIntelligenceEngine:
             "bkt_tier": bkt_tier,
             "bkt_trajectory": trajectory,
         }
+

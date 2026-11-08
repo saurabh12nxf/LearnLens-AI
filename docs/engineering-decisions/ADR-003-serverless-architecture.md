@@ -13,3 +13,4 @@ When migrating FastAPI from a persistent long-running container to Vercel Server
 ## Consequences
 - Cold starts reduced from >14 seconds (hitting Vercel timeout) to ~600 milliseconds.
 - Socket exhaustion and stale TCP drops are eliminated.
+
