@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
@@ -170,82 +171,66 @@ JSON SCHEMA:
         num_questions: int,
     ) -> Dict[str, Any]:
         """
-        Deterministic, grounded fallback quiz generator.
-        Ensures quizzes are always generated even during offline/timeout states.
+        Course-aware deterministic fallback quiz generator.
+        Extracts questions and factual options directly from the document's actual chunks
+        rather than relying on hardcoded DSA questions.
         """
-        predefined_templates = [
-            {
-                "question_text": "What is the primary condition that causes infinite calls and a stack overflow in recursion?",
-                "options": [
-                    "Missing or faulty base case",
-                    "Using top-down memoization",
-                    "Polynomial time complexity",
-                    "Optimal substructure property"
-                ],
-                "correct_index": 0,
-                "explanation": "Every recursive function requires a base case to terminate; without it, calls continue infinitely.",
-                "topic": "Recursion",
-                "difficulty": "Easy"
-            },
-            {
-                "question_text": "Which optimization technique avoids redundant recomputation of overlapping subproblems?",
-                "options": [
-                    "Naive Brute Force",
-                    "Dynamic Programming",
-                    "Selection Sort",
-                    "Unbalanced Tree Traversal"
-                ],
-                "correct_index": 1,
-                "explanation": "Dynamic Programming saves solutions to overlapping subproblems to reduce exponential time to polynomial.",
-                "topic": "Dynamic Programming",
-                "difficulty": "Medium"
-            },
-            {
-                "question_text": "What is the average case time complexity of searching in a Binary Search Tree (BST)?",
-                "options": [
-                    "O(1)",
-                    "O(log n)",
-                    "O(n^2)",
-                    "O(n log n)"
-                ],
-                "correct_index": 1,
-                "explanation": "BST search partitions search space by half on average, yielding O(log n) time complexity.",
-                "topic": "Binary Search Trees",
-                "difficulty": "Medium"
-            },
-            {
-                "question_text": "What is the main difference between Memoization (Top-Down) and Tabulation (Bottom-Up)?",
-                "options": [
-                    "Memoization uses recursion with a cache; Tabulation solves iterative subproblems from smallest up",
-                    "Memoization is O(2^n) while Tabulation is O(n!)",
-                    "Tabulation requires exponential memory overhead",
-                    "Memoization cannot be applied to dynamic programming problems"
-                ],
-                "correct_index": 0,
-                "explanation": "Top-down memoization relies on recursive caching, whereas bottom-up tabulation builds iteratively from base cases.",
-                "topic": "Dynamic Programming",
-                "difficulty": "Hard"
-            },
-            {
-                "question_text": "What traversal method visits nodes of a Binary Search Tree in ascending sorted numerical order?",
-                "options": [
-                    "Pre-order Traversal",
-                    "Post-order Traversal",
-                    "In-order Traversal",
-                    "Breadth-First Search"
-                ],
-                "correct_index": 2,
-                "explanation": "In-order traversal visits left subtree, root, then right subtree, producing ascending sorted order.",
-                "topic": "Tree Traversals",
-                "difficulty": "Easy"
-            }
-        ]
+        questions = []
+        selected_chunks = chunks[:num_questions] if chunks else []
 
-        selected = predefined_templates[:num_questions]
+        for idx, chunk in enumerate(selected_chunks):
+            page_num = chunk.page_number
+            text = chunk.chunk_text.strip()
+            sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if len(s.strip()) > 25]
+            if not sentences:
+                sentences = [text[:150]]
+
+            target_fact = sentences[0]
+            if len(target_fact) > 160:
+                target_fact = target_fact[:157] + "..."
+
+            topic = f"{doc_title} (Page {page_num})"
+            first_line = text.split("\n")[0].strip()
+            clean_first = re.sub(r'^[#*\s0-9.-]+', '', first_line).strip()
+            if 3 < len(clean_first) < 40:
+                topic = clean_first
+
+            question_text = f"According to {doc_title} on [Page {page_num}], which of the following is true regarding this topic?"
+            options = [
+                target_fact,
+                f"This concept is explicitly deprecated and contradicted by {doc_title}.",
+                "This topic applies only under hypothetical assumptions without practical application.",
+                "The referenced material does not provide any verifiable facts on this statement."
+            ]
+
+            questions.append({
+                "question_text": question_text,
+                "options": options,
+                "correct_index": 0,
+                "explanation": f"Grounded directly in {doc_title}, Page {page_num}: \"{target_fact}\"",
+                "topic": topic,
+                "difficulty": "Medium" if idx % 2 == 0 else "Easy",
+            })
+
+        if not questions:
+            questions.append({
+                "question_text": f"What is the foundational subject addressed in '{doc_title}'?",
+                "options": [
+                    f"Core principles and analytical methods of {doc_title}",
+                    "Unrelated non-technical speculation",
+                    "Random conversational summaries",
+                    "Deprecated legacy implementations"
+                ],
+                "correct_index": 0,
+                "explanation": f"The document '{doc_title}' introduces core principles of the subject.",
+                "topic": "Fundamentals",
+                "difficulty": "Easy"
+            })
+
         return {
-            "title": f"{doc_title} Practice Quiz",
-            "topic": "Data Structures & Core Concepts",
-            "questions": selected,
+            "title": f"{doc_title} Grounded Review Quiz",
+            "topic": "Comprehensive Review",
+            "questions": questions[:num_questions],
         }
 
     def grade_attempt(
@@ -275,7 +260,13 @@ JSON SCHEMA:
                 topic_stats[topic] = {"correct": 0, "total": 0}
             topic_stats[topic]["total"] += 1
 
-            selected_idx = user_answers.get(q.id) or user_answers.get(str(q.id))
+            # Fix: Never use Python `or` on option indices because index 0 evaluates as falsy!
+            selected_idx = None
+            if q.id in user_answers:
+                selected_idx = user_answers[q.id]
+            elif str(q.id) in user_answers:
+                selected_idx = user_answers[str(q.id)]
+
             is_correct = (selected_idx is not None and int(selected_idx) == q.correct_index)
 
             if is_correct:
@@ -319,7 +310,7 @@ JSON SCHEMA:
             "score": score,
             "total_questions": total_questions,
             "percentage": percentage,
-            "created_at": attempt.created_at.isoformat(),
+            "created_at": attempt.created_at.isoformat() if attempt.created_at else datetime.datetime.utcnow().isoformat(),
             "topic_results": topic_stats,
             "questions": question_evaluations,
         }

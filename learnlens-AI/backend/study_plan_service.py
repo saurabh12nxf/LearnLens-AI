@@ -99,14 +99,22 @@ class StudyPlanService:
                     "is_gap": tm["accuracy_percentage"] < 60.0,
                 })
 
-        # Fallback topics if no quiz data at all (Cold Start)
+        # Fallback topics if no quiz data at all (Cold Start): derive dynamically from document
         if not target_topics:
-            target_topics = [
-                {"topic": "Core Fundamentals & Definitions", "accuracy": 0.0, "is_gap": False},
-                {"topic": "Data Structures & Trees", "accuracy": 0.0, "is_gap": False},
-                {"topic": "Recursive Divide & Conquer", "accuracy": 0.0, "is_gap": False},
-                {"topic": "Dynamic Programming & Optimization", "accuracy": 0.0, "is_gap": False},
-            ]
+            if resource and hasattr(resource, "chunks") and resource.chunks:
+                seen_topics = set()
+                for c in resource.chunks[:4]:
+                    first_line = c.chunk_text.strip().split("\n")[0][:45]
+                    clean_line = re.sub(r'^[#*\s0-9.-]+', '', first_line).strip()
+                    if len(clean_line) > 3 and clean_line.lower() not in seen_topics:
+                        seen_topics.add(clean_line.lower())
+                        target_topics.append({"topic": clean_line, "accuracy": 0.0, "is_gap": False})
+            if not target_topics:
+                target_topics = [
+                    {"topic": f"{doc_title}: Fundamentals", "accuracy": 0.0, "is_gap": False},
+                    {"topic": f"{doc_title}: Core Principles", "accuracy": 0.0, "is_gap": False},
+                    {"topic": f"{doc_title}: Applied Concepts", "accuracy": 0.0, "is_gap": False},
+                ]
 
         # 4. Search document chunks for page citations and text context
         topic_citations = self._retrieve_citations_for_topics(target_topics, resource.id if resource else None)
@@ -176,14 +184,14 @@ class StudyPlanService:
                     resource_id=resource_id,
                     top_k=2,
                 )
-                if results:
+                if results and results[0].get("page_number"):
                     top_match = results[0]
                     citations[topic_name] = {
                         "page_number": top_match["page_number"],
-                        "snippet": top_match["text_snippet"][:180],
+                        "snippet": top_match.get("text_snippet", "")[:180],
                     }
                 else:
-                    citations[topic_name] = {"page_number": 1, "snippet": ""}
+                    citations[topic_name] = {"page_number": None, "snippet": ""}
         except Exception as e:
             print(f"[StudyPlanService] Citation retrieval error: {e}")
 
@@ -302,11 +310,13 @@ JSON SCHEMA:
             is_gap = t_info.get("is_gap", False)
             accuracy = t_info.get("accuracy", 0.0)
 
-            page = topic_citations.get(topic_name, {}).get("page_number", max(1, day_num))
+            citation_data = topic_citations.get(topic_name, {})
+            page = citation_data.get("page_number")
+            page_cite = f"on [Page {page}]" if page is not None else "in your notes"
 
             if is_gap or accuracy < 60.0:
                 theme = f"Core Gap Remediation: {topic_name}"
-                task_1_desc = f"Carefully review notes on [Page {page}] regarding {topic_name}. Focus on fundamental principles, definitions, and step-by-step examples."
+                task_1_desc = f"Carefully review notes {page_cite} regarding {topic_name}. Focus on fundamental principles, definitions, and step-by-step examples."
                 task_2_desc = f"Practice 3-5 targeted practice questions for {topic_name} to raise mastery level above 60%."
             elif day_num == duration_days:
                 theme = "Comprehensive Course Review & Mock Test"
@@ -314,7 +324,7 @@ JSON SCHEMA:
                 task_2_desc = "Take a full 5-question multi-topic assessment to benchmark final readiness."
             else:
                 theme = f"Concept Deep-Dive: {topic_name}"
-                task_1_desc = f"Read core sections for {topic_name} on [Page {page}], analyzing algorithmic performance and trade-offs."
+                task_1_desc = f"Read core sections for {topic_name} {page_cite}, analyzing principles and problem-solving techniques."
                 task_2_desc = f"Complete practice drills and write a short 2-minute summary of {topic_name} key takeaways."
 
             tasks = [

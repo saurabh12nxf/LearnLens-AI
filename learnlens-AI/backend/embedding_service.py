@@ -70,32 +70,41 @@ class EmbeddingService:
                 self._backend_type = "fallback"
 
     def get_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for a single string."""
+        """
+        Generate dense 384-dimensional embedding vector for a single string.
+        Fails fast with explicit RuntimeError rather than silently returning zero vectors.
+        """
         if not text or not text.strip():
-            return [0.0] * self.dimension
+            raise ValueError("Cannot generate vector embedding for empty or whitespace-only text.")
 
-        if self._backend_type == "fastembed":
+        if self._backend_type == "fastembed" and self._model is not None:
             embeddings = list(self._model.embed([text]))
             if embeddings:
                 return embeddings[0].tolist()
-            return [0.0] * self.dimension
+            raise RuntimeError("FastEmbed returned empty embedding generator.")
 
-        if self._backend_type == "sentence_transformers":
+        if self._backend_type == "sentence_transformers" and self._model is not None:
             embedding = self._model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
             return embedding.tolist()
 
-        return [0.0] * self.dimension
+        raise RuntimeError(
+            f"Embedding engine failure: backend '{self._backend_type}' is uninitialized. "
+            "Neither FastEmbed nor SentenceTransformers could be loaded."
+        )
 
     def get_embeddings_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
-        """Generate embedding vectors for a list of strings in batches."""
+        """
+        Generate embedding vectors for a list of strings in batches.
+        Fails fast if the embedding model is unavailable.
+        """
         if not texts:
             return []
 
-        if self._backend_type == "fastembed":
+        if self._backend_type == "fastembed" and self._model is not None:
             embeddings = list(self._model.embed(texts, batch_size=batch_size))
             return [e.tolist() for e in embeddings]
 
-        if self._backend_type == "sentence_transformers":
+        if self._backend_type == "sentence_transformers" and self._model is not None:
             embeddings = self._model.encode(
                 texts,
                 batch_size=batch_size,
@@ -105,7 +114,10 @@ class EmbeddingService:
             )
             return embeddings.tolist()
 
-        return [[0.0] * self.dimension for _ in texts]
+        raise RuntimeError(
+            f"Embedding engine failure: backend '{self._backend_type}' is uninitialized. "
+            "Cannot generate batch embeddings."
+        )
 
     @staticmethod
     def cosine_similarity(vec_a: Union[List[float], np.ndarray], vec_b: Union[List[float], np.ndarray]) -> float:

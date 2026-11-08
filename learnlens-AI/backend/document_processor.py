@@ -144,15 +144,93 @@ class DocumentProcessor:
 
         return chunks
 
-    def process_pdf(self, file_path: str) -> Dict[str, Any]:
-        """Convenience method that extracts pages and chunks the document in one call."""
+    def chunk_document_structural(self, pages_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Structure-aware chunking: splits by logical paragraphs (double newlines)
+        and preserves complete sentence and paragraph boundaries up to chunk_size.
+        """
+        chunks = []
+        global_chunk_idx = 0
+
+        for page_info in pages_data:
+            page_num = page_info["page_number"]
+            page_text = page_info["text"]
+
+            if not page_text or len(page_text.strip()) == 0:
+                continue
+
+            paragraphs = [p.strip() for p in re.split(r'\n\s*\n', page_text) if p.strip()]
+            current_chunk = []
+            current_len = 0
+
+            for para in paragraphs:
+                para_len = len(para)
+                if current_len + para_len + 1 <= self.chunk_size:
+                    current_chunk.append(para)
+                    current_len += para_len + 1
+                else:
+                    if current_chunk:
+                        chunk_content = "\n\n".join(current_chunk)
+                        chunks.append({
+                            "chunk_index": global_chunk_idx,
+                            "page_number": page_num,
+                            "text": chunk_content,
+                            "length": len(chunk_content),
+                        })
+                        global_chunk_idx += 1
+                        current_chunk = []
+                        current_len = 0
+
+                    if para_len > self.chunk_size:
+                        # Fallback to sliding window for oversized paragraphs
+                        sub_chunks = self.chunk_document([{"page_number": page_num, "text": para}])
+                        for sc in sub_chunks:
+                            sc["chunk_index"] = global_chunk_idx
+                            chunks.append(sc)
+                            global_chunk_idx += 1
+                    else:
+                        current_chunk.append(para)
+                        current_len = para_len
+
+            if current_chunk:
+                chunk_content = "\n\n".join(current_chunk)
+                chunks.append({
+                    "chunk_index": global_chunk_idx,
+                    "page_number": page_num,
+                    "text": chunk_content,
+                    "length": len(chunk_content),
+                })
+                global_chunk_idx += 1
+
+        return chunks
+
+    def process_pdf(self, file_path: str, strategy: str = "sliding_window") -> Dict[str, Any]:
+        """
+        Extracts pages and chunks the document.
+        Validates that the PDF contains extractable text to prevent indexing scanned/empty files.
+        """
         pages = self.extract_text_from_pdf(file_path)
-        chunks = self.chunk_document(pages)
+        total_text_length = sum(p.get("char_count", 0) for p in pages)
+        if not pages or total_text_length == 0:
+            raise ValueError(
+                "The uploaded document does not contain extractable text (e.g., scanned image PDF or empty file). "
+                "Please upload a text-searchable PDF."
+            )
+
+        if strategy == "structural":
+            chunks = self.chunk_document_structural(pages)
+        else:
+            chunks = self.chunk_document(pages)
+
+        if not chunks:
+            raise ValueError("No valid text chunks could be extracted from this PDF.")
+
         return {
             "file_path": file_path,
             "filename": os.path.basename(file_path),
             "page_count": len(pages),
             "chunk_count": len(chunks),
+            "strategy_used": strategy,
             "pages": pages,
             "chunks": chunks,
         }
