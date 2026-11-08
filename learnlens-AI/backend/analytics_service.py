@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import QuizAttempt, Quiz, QuizQuestion, LearningResource
+from learning_intelligence import BayesianKnowledgeTracer
 
 
 class AnalyticsService:
@@ -70,6 +71,15 @@ class AnalyticsService:
             corr = stats["correct"]
             acc = round((corr / tot) * 100, 1) if tot > 0 else 0.0
 
+            # Compute Bayesian Knowledge Tracing (BKT) probability
+            bkt = BayesianKnowledgeTracer()
+            p_l = bkt.p_l0
+            for _ in range(corr):
+                p_l = bkt.update_mastery(p_l, True)
+            for _ in range(tot - corr):
+                p_l = bkt.update_mastery(p_l, False)
+            bkt_mastery_pct = round(p_l * 100, 1)
+
             if acc >= 80.0:
                 tier = "Mastered"
                 tier_color = "#10b981"  # Emerald
@@ -85,6 +95,8 @@ class AnalyticsService:
                 "questions_attempted": tot,
                 "questions_correct": corr,
                 "accuracy_percentage": acc,
+                "bkt_mastery_percentage": bkt_mastery_pct,
+                "predicted_next_success_prob": bkt.predict_correct(p_l),
                 "mastery_tier": tier,
                 "tier_color": tier_color,
             }

@@ -66,6 +66,20 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_correlation_and_timing_headers(request: Request, call_next):
+    """Adds correlation request IDs and response latency headers for production observability."""
+    import time
+    import uuid
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Response-Time"] = f"{process_time:.2f}ms"
+    return response
+
+
 @app.exception_handler(OperationalError)
 @app.exception_handler(DatabaseError)
 async def db_connection_exception_handler(request: Request, exc: Exception):
