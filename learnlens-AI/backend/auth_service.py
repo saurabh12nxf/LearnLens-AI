@@ -10,9 +10,14 @@ from sqlalchemy.orm import Session
 from database import get_db, User
 
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "learnlens-ai-jwt-secret-key-production-grade-2026")
+DEFAULT_DEV_SECRET = "learnlens-ai-jwt-secret-key-production-grade-2026"
+JWT_SECRET = os.getenv("JWT_SECRET", DEFAULT_DEV_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+RESET_TOKEN_EXPIRE_MINUTES = 15        # 15 minutes for password resets
+
+if (os.getenv("VERCEL") or os.getenv("ENVIRONMENT") == "production") and JWT_SECRET == DEFAULT_DEV_SECRET:
+    print("[SECURITY WARNING] Running in production with default JWT_SECRET! Set JWT_SECRET in Vercel settings.")
 
 security = HTTPBearer(auto_error=False)
 
@@ -33,22 +38,56 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[datetime.timedelta] = None) -> str:
-    """Create a signed JWT token."""
+    """Create a signed JWT access token."""
     to_encode = data.copy()
+    now = datetime.datetime.now(datetime.timezone.utc)
     if expires_delta:
-        expire = datetime.datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire, "iat": datetime.datetime.utcnow()})
+    to_encode.update({"type": "access", "exp": expire, "iat": now})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
+
+def create_password_reset_token(email: str, expires_minutes: int = RESET_TOKEN_EXPIRE_MINUTES) -> str:
+    """
+    Creates a cryptographically signed, short-lived reset token (15 mins)
+    bound strictly to the user's email address.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expire = now + datetime.timedelta(minutes=expires_minutes)
+    payload = {
+        "sub": email.strip().lower(),
+        "type": "password_reset",
+        "iat": now,
+        "exp": expire,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    """
+    Validates a password reset token.
+    Returns the verified email address if valid, or None if expired/tampered/wrong type.
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "password_reset":
+            return None
+        email = payload.get("sub")
+        return email.strip().lower() if email else None
+    except (jwt.PyJWTError, Exception):
+        return None
 
 
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     """Decode and validate a JWT token."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") == "password_reset":
+            return None  # Reset tokens cannot be used as API access tokens
         return payload
     except (jwt.PyJWTError, Exception):
         return None

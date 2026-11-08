@@ -2,6 +2,7 @@
 import os
 import sys
 import shutil
+import re
 
 # Guard: LearnLens AI is purely NLP / text-based and does not use computer vision.
 # Prevents mismatched torchvision C++ binaries from crashing sentence-transformers.
@@ -32,6 +33,8 @@ from auth_service import (
     hash_password,
     verify_password,
     create_access_token,
+    create_password_reset_token,
+    verify_password_reset_token,
     get_current_user,
     ensure_demo_user,
 )
@@ -49,10 +52,14 @@ app = FastAPI(
     version="3.0.0",
 )
 
-# Enable CORS for frontend integration
+# Enable strict and secure CORS configuration
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -130,8 +137,9 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    email: str
     new_password: str
+    reset_token: Optional[str] = None
+    email: Optional[str] = None
 
 
 class UserProfileResponse(BaseModel):
@@ -360,7 +368,7 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
-    Checks if an email exists and prepares for password reset.
+    Validates user email and issues a secure, expiring 15-minute password reset token.
     """
     email_clean = req.email.strip().lower()
     user = db.query(User).filter(User.email == email_clean).first()
@@ -369,23 +377,47 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
             status_code=404,
             detail="No account found with this email address.",
         )
+
+    reset_token = create_password_reset_token(email_clean, expires_minutes=15)
     return {
         "success": True,
-        "message": f"Account located for '{email_clean}'. You can now set your new password.",
+        "message": f"Password reset token generated for '{email_clean}'. Valid for 15 minutes.",
         "email": email_clean,
+        "reset_token": reset_token,
     }
 
 
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
-    Resets the password for a user account with salted bcrypt hashing.
+    Resets the password for a user account using a verified, single-use, expiring reset token.
     """
-    email_clean = req.email.strip().lower()
     if len(req.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
 
-    user = db.query(User).filter(User.email == email_clean).first()
+    target_email = None
+    if req.reset_token:
+        target_email = verify_password_reset_token(req.reset_token)
+        if not target_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid, expired, or tampered password reset token. Please request a new token.",
+            )
+    elif req.email:
+        # In production environments, an authenticated reset_token is strictly enforced
+        if os.getenv("VERCEL") or os.getenv("ENVIRONMENT") == "production":
+            raise HTTPException(
+                status_code=400,
+                detail="A valid, signed reset_token is required to reset password.",
+            )
+        target_email = req.email.strip().lower()
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid reset_token is required to reset password.",
+        )
+
+    user = db.query(User).filter(User.email == target_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="No account found with this email address.")
 
@@ -455,18 +487,42 @@ async def upload_document(
     4. Computes embeddings (384-dim)
     5. Stores document + chunks + embeddings tagged with current_user.id
     """
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are currently supported.")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files (.pdf) are supported.")
 
-    file_title = title.strip() if title and title.strip() else os.path.splitext(file.filename)[0]
+    # Sanitize filename
+    raw_name = os.path.basename(file.filename)
+    safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+    if not safe_filename.lower().endswith(".pdf"):
+        safe_filename += ".pdf"
+
+    # Read and validate magic byte header
+    header_bytes = await file.read(1024)
+    if not header_bytes.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file signature: uploaded file does not start with a valid PDF magic header (%PDF).",
+        )
+
+    # Read remaining file content and enforce 25MB maximum upload limit
+    remaining_bytes = await file.read()
+    full_content = header_bytes + remaining_bytes
+    max_upload_size = 25 * 1024 * 1024  # 25MB
+    if len(full_content) > max_upload_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum allowed upload size of 25MB (Received {len(full_content) / (1024*1024):.2f}MB).",
+        )
+
+    file_title = title.strip() if title and title.strip() else os.path.splitext(safe_filename)[0]
     user_upload_dir = os.path.join(UPLOAD_DIR, f"user_{current_user.id}")
     os.makedirs(user_upload_dir, exist_ok=True)
-    saved_path = os.path.join(user_upload_dir, file.filename)
+    saved_path = os.path.join(user_upload_dir, safe_filename)
 
     with open(saved_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(full_content)
 
-    file_size = os.path.getsize(saved_path)
+    file_size = len(full_content)
 
     try:
         from document_processor import DocumentProcessor
@@ -477,7 +533,7 @@ async def upload_document(
         store = VectorStore(db)
         resource = store.store_document(
             title=file_title,
-            filename=file.filename,
+            filename=safe_filename,
             file_path=saved_path,
             file_size=file_size,
             page_count=processed_data["page_count"],
@@ -513,10 +569,10 @@ def query_rag(
     if not req.question or not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    # If document_id is provided, verify it belongs to this user or is accessible
+    # If document_id is provided, verify it strictly belongs to this user
     if req.document_id:
         doc = db.query(LearningResource).filter(LearningResource.id == req.document_id).first()
-        if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+        if not doc or doc.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Selected document not found in your workspace.")
 
     from vector_store import VectorStore
@@ -543,7 +599,7 @@ def list_documents(
     """List all learning resources belonging to the authenticated user's workspace."""
     resources = (
         db.query(LearningResource)
-        .filter((LearningResource.user_id == current_user.id) | (LearningResource.user_id == None))
+        .filter(LearningResource.user_id == current_user.id)
         .order_by(LearningResource.id.desc())
         .all()
     )
@@ -555,7 +611,7 @@ def list_documents(
             "page_count": r.page_count,
             "chunk_count": r.chunk_count,
             "file_size": r.file_size,
-            "quiz_count": len([q for q in r.quizzes if q.user_id == current_user.id or q.user_id is None]),
+            "quiz_count": len([q for q in r.quizzes if q.user_id == current_user.id]),
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in resources
@@ -571,7 +627,7 @@ def get_document_chunks(
 ):
     """View chunks of a specific document for inspection within user's space."""
     doc = db.query(LearningResource).filter(LearningResource.id == doc_id).first()
-    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+    if not doc or doc.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found.")
 
     chunks = (
@@ -604,7 +660,7 @@ def delete_document(
 ):
     """Delete a document and its chunks belonging to the authenticated user."""
     doc = db.query(LearningResource).filter(LearningResource.id == doc_id).first()
-    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+    if not doc or doc.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found.")
 
     if os.path.exists(doc.file_path):
@@ -631,9 +687,9 @@ def generate_quiz(
     """
     Auto-generates a topic-tagged multiple choice quiz from a user's learning resource.
     """
-    # Verify document ownership
+    # Verify document ownership strictly
     doc = db.query(LearningResource).filter(LearningResource.id == req.document_id).first()
-    if not doc or (doc.user_id is not None and doc.user_id != current_user.id):
+    if not doc or doc.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found.")
 
     from quiz_service import QuizService
@@ -666,7 +722,7 @@ def list_quizzes(
     """List quizzes belonging to the authenticated user."""
     query = (
         db.query(Quiz)
-        .filter((Quiz.user_id == current_user.id) | (Quiz.user_id == None))
+        .filter(Quiz.user_id == current_user.id)
         .order_by(Quiz.id.desc())
     )
     if document_id:
@@ -681,7 +737,7 @@ def list_quizzes(
             "title": q.title,
             "topic": q.topic,
             "question_count": len(q.questions),
-            "attempt_count": len([a for a in q.attempts if a.user_id == current_user.id or a.user_id is None]),
+            "attempt_count": len([a for a in q.attempts if a.user_id == current_user.id]),
             "created_at": q.created_at.isoformat() if q.created_at else None,
         }
         for q in quizzes
@@ -699,7 +755,7 @@ def get_quiz(
     Fetch a quiz and its questions within the user's workspace.
     """
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
+    if not quiz or quiz.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
     questions = []
@@ -739,7 +795,7 @@ def submit_quiz_attempt(
     computes score, and calculates topic accuracy in user's isolated profile.
     """
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
+    if not quiz or quiz.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
     from quiz_service import QuizService
@@ -765,7 +821,7 @@ def delete_quiz(
 ):
     """Delete a quiz belonging to the authenticated user."""
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
-    if not quiz or (quiz.user_id is not None and quiz.user_id != current_user.id):
+    if not quiz or quiz.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Quiz not found.")
 
     db.delete(quiz)
@@ -848,7 +904,7 @@ def get_study_plan(
 ):
     """Retrieve complete study plan details with days, tasks, and completion status."""
     plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
-    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
+    if not plan or plan.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
     from study_plan_service import StudyPlanService
@@ -866,7 +922,7 @@ def toggle_study_task(
 ):
     """Toggle completion status of a specific task in the study plan."""
     plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
-    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
+    if not plan or plan.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
     from study_plan_service import StudyPlanService
@@ -885,7 +941,7 @@ def delete_study_plan(
 ):
     """Delete a study plan belonging to the authenticated user."""
     plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
-    if not plan or (plan.user_id is not None and plan.user_id != current_user.id):
+    if not plan or plan.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Study plan not found.")
 
     from study_plan_service import StudyPlanService

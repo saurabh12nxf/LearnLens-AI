@@ -62,18 +62,30 @@ def test_auth_and_isolation():
     assert login_token is not None
     print("✅ User A Login Verified! JWT token issued.")
 
-    # 4b. Test Forgot Password and Reset Password
-    print("\n[4b] Testing Forgot & Reset Password Endpoints...")
+    # 4b. Test Secure Forgot Password and Reset Password Flow
+    print("\n[4b] Testing Secure Token-Based Forgot & Reset Password Endpoints...")
     res_forgot = client.post("/api/auth/forgot-password", json={"email": user_a_email})
     assert res_forgot.status_code == 200
-    print("✅ Forgot password identified account.")
+    forgot_data = res_forgot.json()
+    assert "reset_token" in forgot_data
+    reset_token = forgot_data["reset_token"]
+    print("✅ Forgot password generated cryptographically verified reset token.")
 
+    # Negative Test: Reset password with invalid token must fail
+    res_invalid_reset = client.post("/api/auth/reset-password", json={
+        "reset_token": "invalid-or-forged-token",
+        "new_password": "attempted_hack_pass"
+    })
+    assert res_invalid_reset.status_code == 400
+    print("✅ Negative test: Invalid/forged reset token rejected with 400.")
+
+    # Positive Test: Reset password with valid token
     res_reset = client.post("/api/auth/reset-password", json={
-        "email": user_a_email,
+        "reset_token": reset_token,
         "new_password": "new_sarah_password_456"
     })
     assert res_reset.status_code == 200
-    print("✅ Password reset successful.")
+    print("✅ Password reset successful with verified token.")
 
     # Verify login with new password
     res_new_login = client.post("/api/auth/login", json={

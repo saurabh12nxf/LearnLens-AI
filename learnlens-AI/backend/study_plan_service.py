@@ -60,13 +60,13 @@ class StudyPlanService:
         if resource_id:
             query = self.db.query(LearningResource).filter(LearningResource.id == resource_id)
             if user_id:
-                query = query.filter((LearningResource.user_id == user_id) | (LearningResource.user_id == None))
+                query = query.filter(LearningResource.user_id == user_id)
             resource = query.first()
         if not resource:
             # Fall back to latest uploaded resource for this user
             res_query = self.db.query(LearningResource)
             if user_id:
-                res_query = res_query.filter((LearningResource.user_id == user_id) | (LearningResource.user_id == None))
+                res_query = res_query.filter(LearningResource.user_id == user_id)
             resource = res_query.order_by(LearningResource.id.desc()).first()
 
         doc_title = resource.title if resource else "Study Course"

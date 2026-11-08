@@ -279,7 +279,7 @@ class StudyPlan(Base):
 
 
 def init_db():
-    """Ensure pgvector extension exists, create all tables, and ensure user_id migration."""
+    """Ensure pgvector extension exists, create all tables, ensure user_id migration and HNSW vector index."""
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.commit()
@@ -287,7 +287,7 @@ def init_db():
     # Create tables (creates users table if not exists)
     Base.metadata.create_all(bind=engine)
 
-    # Ensure user_id column exists on existing tables for smooth migration
+    # Ensure user_id column exists on existing tables and assign legacy NULL rows to demo user
     with engine.connect() as conn:
         tables_to_migrate = ["learning_resources", "quizzes", "quiz_attempts", "study_plans"]
         for tbl in tables_to_migrate:
@@ -305,7 +305,43 @@ def init_db():
             conn.execute(migration_sql)
         conn.commit()
 
-    print("Database tables initialized with Users, pgvector, Quizzes, Analytics, and Study Plans.")
+        # Reassign any legacy NULL user_id records to the primary demo user so data is preserved
+        legacy_cleanup_sql = text("""
+            DO $$
+            DECLARE
+                target_user_id INTEGER;
+            BEGIN
+                SELECT id INTO target_user_id FROM users WHERE email = 'demo@learnlens.ai' LIMIT 1;
+                IF target_user_id IS NOT NULL THEN
+                    UPDATE learning_resources SET user_id = target_user_id WHERE user_id IS NULL;
+                    UPDATE quizzes SET user_id = target_user_id WHERE user_id IS NULL;
+                    UPDATE quiz_attempts SET user_id = target_user_id WHERE user_id IS NULL;
+                    UPDATE study_plans SET user_id = target_user_id WHERE user_id IS NULL;
+                END IF;
+            END $$;
+        """)
+        conn.execute(legacy_cleanup_sql)
+        conn.commit()
+
+        # Explicitly create HNSW index for high-performance sub-linear cosine vector similarity retrieval
+        hnsw_index_sql = text("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'
+                ) THEN
+                    CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding_hnsw 
+                    ON document_chunks USING hnsw (embedding vector_cosine_ops);
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                -- If index creation fails (e.g. insufficient privileges), fallback to sequential scan
+                NULL;
+            END $$;
+        """)
+        conn.execute(hnsw_index_sql)
+        conn.commit()
+
+    print("Database tables initialized with Users, pgvector HNSW indexing, Quizzes, Analytics, and Study Plans.")
 
 
 def get_db():

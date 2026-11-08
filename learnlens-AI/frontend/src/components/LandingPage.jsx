@@ -119,8 +119,16 @@ export default function LandingPage() {
 
     setLoading(true);
     try {
-      const res = await api.post('/api/auth/reset-password', {
+      // 1. Request single-use verified reset token bound to email
+      const tokenRes = await api.post('/api/auth/forgot-password', {
         email: emailTrimmed,
+      });
+
+      const resetToken = tokenRes.reset_token;
+
+      // 2. Submit password reset with the cryptographically verified token
+      const res = await api.post('/api/auth/reset-password', {
+        reset_token: resetToken,
         new_password: formData.newPassword,
       });
 

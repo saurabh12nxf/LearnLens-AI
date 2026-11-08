@@ -85,12 +85,13 @@ class VectorStore:
         where_clauses = []
         params: Dict[str, Any] = {"vec": vector_str, "top_k": top_k}
 
+        if user_id:
+            where_clauses.append("lr.user_id = :user_id")
+            params["user_id"] = user_id
+
         if resource_id:
             where_clauses.append("dc.resource_id = :resource_id")
             params["resource_id"] = resource_id
-        elif user_id:
-            where_clauses.append("(lr.user_id = :user_id OR lr.user_id IS NULL)")
-            params["user_id"] = user_id
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -165,12 +166,13 @@ class VectorStore:
         """
         params = {f"w{i}": f"%{w}%" for i, w in enumerate(words)}
 
+        if user_id:
+            base_sql += " AND lr.user_id = :user_id"
+            params["user_id"] = user_id
+
         if resource_id:
             base_sql += " AND dc.resource_id = :resource_id"
             params["resource_id"] = resource_id
-        elif user_id:
-            base_sql += " AND (lr.user_id = :user_id OR lr.user_id IS NULL)"
-            params["user_id"] = user_id
 
         base_sql += " LIMIT :top_k;"
         params["top_k"] = top_k
