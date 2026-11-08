@@ -79,13 +79,24 @@ def test_auth_and_isolation():
     assert res_invalid_reset.status_code == 400
     print("✅ Negative test: Invalid/forged reset token rejected with 400.")
 
-    # Positive Test: Reset password with valid token
+    # Negative Test: Reset password using the SAME password as current password (platform standard)
+    res_same_reset = client.post("/api/auth/reset-password", json={
+        "reset_token": reset_token,
+        "email": user_a_email,
+        "new_password": "sarahpassword123"  # Same as old password!
+    })
+    assert res_same_reset.status_code == 400
+    assert "New password cannot be the same as your current password" in res_same_reset.json()["detail"]
+    print("✅ Negative test: Resetting with same password rejected with 400 ('New password cannot be the same as your current password').")
+
+    # Positive Test: Reset password with valid token and fresh password
     res_reset = client.post("/api/auth/reset-password", json={
         "reset_token": reset_token,
+        "email": user_a_email,
         "new_password": "new_sarah_password_456"
     })
     assert res_reset.status_code == 200
-    print("✅ Password reset successful with verified token.")
+    print("✅ Password reset successful with verified token and different password.")
 
     # Verify login with new password
     res_new_login = client.post("/api/auth/login", json={

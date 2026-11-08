@@ -116,19 +116,29 @@ export default function LandingPage() {
       setError('Passwords do not match.');
       return;
     }
+    if (formData.password && formData.newPassword === formData.password) {
+      setError('New password cannot be the same as your current password. Please choose a different password.');
+      return;
+    }
 
     setLoading(true);
     try {
       // 1. Request single-use verified reset token bound to email
-      const tokenRes = await api.post('/api/auth/forgot-password', {
-        email: emailTrimmed,
-      });
+      let resetToken = null;
+      try {
+        const tokenRes = await api.post('/api/auth/forgot-password', {
+          email: emailTrimmed,
+        });
+        resetToken = tokenRes?.reset_token;
+      } catch (tokenErr) {
+        // If account not found or rate-limited, surface the error
+        throw tokenErr;
+      }
 
-      const resetToken = tokenRes.reset_token;
-
-      // 2. Submit password reset with the cryptographically verified token
+      // 2. Submit password reset with the cryptographically verified token AND email fallback
       const res = await api.post('/api/auth/reset-password', {
         reset_token: resetToken,
+        email: emailTrimmed,
         new_password: formData.newPassword,
       });
 

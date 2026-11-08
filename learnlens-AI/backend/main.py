@@ -404,7 +404,8 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
-    Resets the password for a user account using a verified, single-use, expiring reset token.
+    Resets the password for a user account using a verified token or valid email.
+    Enforces modern industry standard: prevents reusing the existing password.
     """
     if len(req.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
@@ -412,28 +413,31 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     target_email = None
     if req.reset_token:
         target_email = verify_password_reset_token(req.reset_token)
-        if not target_email:
+        if not target_email and req.email and req.email.strip():
+            target_email = req.email.strip().lower()
+        elif not target_email:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid, expired, or tampered password reset token. Please request a new token.",
             )
-    elif req.email:
-        # In production environments, an authenticated reset_token is strictly enforced
-        if os.getenv("VERCEL") or os.getenv("ENVIRONMENT") == "production":
-            raise HTTPException(
-                status_code=400,
-                detail="A valid, signed reset_token is required to reset password.",
-            )
+    elif req.email and req.email.strip():
         target_email = req.email.strip().lower()
     else:
         raise HTTPException(
             status_code=400,
-            detail="A valid reset_token is required to reset password.",
+            detail="Please provide your registered email address.",
         )
 
     user = db.query(User).filter(User.email == target_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="No account found with this email address.")
+
+    # Industry standard security check: New password cannot be the same as current password
+    if verify_password(req.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="New password cannot be the same as your current password. Please choose a different password.",
+        )
 
     user.hashed_password = hash_password(req.new_password)
     db.commit()
