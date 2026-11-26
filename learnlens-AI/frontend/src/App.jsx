@@ -48,6 +48,7 @@ function AuthenticatedWorkspace() {
         console.warn('Backend not yet reachable:', err);
       }
       await fetchDocuments();
+      await fetchChatHistory();
     };
 
     // Reset workspace state for new user
@@ -55,6 +56,38 @@ function AuthenticatedWorkspace() {
     setSelectedDocId(null);
     initApp();
   }, [user?.id, isAuthenticated]);
+
+  const fetchChatHistory = async () => {
+    try {
+      const res = await fetch('/api/chat/history');
+      if (res.ok) {
+        const history = await res.json();
+        const loaded = [];
+        history.forEach((item) => {
+          const time = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          loaded.push({
+            role: 'user',
+            content: item.question,
+            timestamp: time,
+          });
+          loaded.push({
+            role: 'assistant',
+            content: item.answer,
+            citations: item.citations || [],
+            retrieval_method: 'semantic',
+            model_used: item.model_used,
+            pedagogical_mode: item.pedagogical_mode,
+            timestamp: time,
+          });
+        });
+        if (loaded.length > 0) {
+          setMessages(loaded);
+        }
+      }
+    } catch (err) {
+      console.debug('Chat history load notice:', err);
+    }
+  };
 
   const fetchDocuments = async () => {
     setLoadingDocuments(true);
@@ -148,8 +181,13 @@ function AuthenticatedWorkspace() {
     }
   };
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
     setMessages([]);
+    try {
+      await fetch('/api/chat/history', { method: 'DELETE' });
+    } catch (err) {
+      console.debug('Error clearing remote chat history:', err);
+    }
     showToast('Conversation cleared', 'info');
   };
 

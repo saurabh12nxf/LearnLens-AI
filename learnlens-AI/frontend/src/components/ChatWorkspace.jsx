@@ -396,6 +396,18 @@ export default function ChatWorkspace({
                     <span>Verified Answer</span>
                   </span>
                 )}
+                {msg.pedagogical_mode === 'foundational' && (
+                  <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.3)' }} title="Personalized explanation adapted for knowledge gap scaffolding">
+                    <Sparkles size={11} />
+                    <span>Foundational Scaffolding</span>
+                  </span>
+                )}
+                {msg.pedagogical_mode === 'advanced' && (
+                  <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.3)' }} title="Personalized explanation adapted for high mastery depth">
+                    <Zap size={11} />
+                    <span>Advanced Depth</span>
+                  </span>
+                )}
                 {msg.timestamp && (
                   <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
                     {msg.timestamp}

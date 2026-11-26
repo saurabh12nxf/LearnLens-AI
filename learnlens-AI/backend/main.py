@@ -28,6 +28,7 @@ from database import (
     QuizQuestion,
     QuizAttempt,
     StudyPlan,
+    ChatInteraction,
 )
 from auth_service import (
     hash_password,
@@ -197,6 +198,8 @@ class QueryResponse(BaseModel):
     retrieval_method: str
     chunks_used: int
     model_used: str
+    pedagogical_mode: Optional[str] = "standard"
+    interaction_id: Optional[int] = None
 
 
 # --- Quiz Schemas ---
@@ -600,6 +603,37 @@ def query_rag(
     from vector_store import VectorStore
     from rag_service import RAGService
 
+    # FR-09: Detect learner mastery context to adapt explanation depth & scaffolding
+    mastery_context = None
+    try:
+        from analytics_service import AnalyticsService
+        analytics = AnalyticsService(db)
+        overview = analytics.get_learner_overview(user_id=current_user.id)
+        q_lower = req.question.lower()
+
+        # Check if the query touches any diagnosed knowledge gaps (<60% accuracy)
+        for gap in overview.get("knowledge_gaps", []):
+            if gap["topic"].lower() in q_lower or (doc and gap["topic"].lower() in doc.title.lower()):
+                mastery_context = {
+                    "tier": "foundational",
+                    "topic": gap["topic"],
+                    "accuracy": gap["accuracy_percentage"] / 100.0,
+                }
+                break
+
+        # If not a gap, check if it is a mastered topic (>80% accuracy)
+        if not mastery_context:
+            for top in overview.get("topic_mastery", []):
+                if top["topic"].lower() in q_lower and top["accuracy_percentage"] >= 80:
+                    mastery_context = {
+                        "tier": "advanced",
+                        "topic": top["topic"],
+                        "accuracy": top["accuracy_percentage"] / 100.0,
+                    }
+                    break
+    except Exception as e:
+        print(f"[Pedagogical Adaptation Notice] {e}")
+
     store = VectorStore(db)
     rag = RAGService(store)
 
@@ -609,8 +643,69 @@ def query_rag(
         top_k=req.top_k or 4,
         retrieval_method=req.retrieval_method or "semantic",
         user_id=current_user.id,
+        mastery_context=mastery_context,
     )
+
+    # FR-05: Persist learning interaction to user's persistent history
+    try:
+        interaction = ChatInteraction(
+            user_id=current_user.id,
+            resource_id=req.document_id,
+            question=req.question.strip(),
+            answer=result.get("answer", ""),
+            citations=result.get("citations", []),
+            model_used=result.get("model_used", ""),
+            pedagogical_mode=result.get("pedagogical_mode", "standard"),
+        )
+        db.add(interaction)
+        db.commit()
+        db.refresh(interaction)
+        result["interaction_id"] = interaction.id
+    except Exception as e:
+        print(f"[Chat History Persistence Warning] {e}")
+
     return result
+
+
+@app.get("/api/chat/history")
+def get_chat_history(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve persistent question & chat history for the authenticated user (FR-05).
+    """
+    interactions = (
+        db.query(ChatInteraction)
+        .filter(ChatInteraction.user_id == current_user.id)
+        .order_by(ChatInteraction.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": item.id,
+            "question": item.question,
+            "answer": item.answer,
+            "citations": item.citations or [],
+            "model_used": item.model_used,
+            "pedagogical_mode": item.pedagogical_mode,
+            "created_at": item.created_at.isoformat(),
+        }
+        for item in interactions
+    ]
+
+
+@app.delete("/api/chat/history")
+def clear_chat_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Clear the authenticated user's persistent chat history."""
+    db.query(ChatInteraction).filter(ChatInteraction.user_id == current_user.id).delete()
+    db.commit()
+    return {"success": True, "message": "Chat history cleared successfully."}
 
 
 @app.get("/api/documents")

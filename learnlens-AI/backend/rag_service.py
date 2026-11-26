@@ -38,12 +38,13 @@ class RAGService:
         top_k: int = 4,
         retrieval_method: str = "semantic",
         user_id: Optional[int] = None,
+        mastery_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Executes the full RAG pipeline:
         1. Query -> Vector / Keyword Search
         2. Retrieve top-K chunks with page numbers and scores
-        3. Formulate strict academic prompt
+        3. Formulate strict academic prompt with adaptive pedagogical depth (FR-09)
         4. Synthesize grounded answer with source attribution
         """
         # Step 1 & 2: Retrieval
@@ -97,6 +98,29 @@ class RAGService:
 
         combined_context = "\n\n---\n\n".join(context_blocks)
 
+        # Step 2b: Adaptive Pedagogical Instruction (FR-09)
+        pedagogical_instructions = ""
+        pedagogical_mode = "standard"
+        if mastery_context:
+            tier = mastery_context.get("tier", "proficient")
+            topic = mastery_context.get("topic", "this topic")
+            acc = mastery_context.get("accuracy", 0.0)
+            if tier == "foundational":
+                pedagogical_mode = "foundational"
+                pedagogical_instructions = (
+                    f"\nPEDAGOGICAL ADAPTATION (Learner needs scaffolding in '{topic}' | Diagnostic Mastery: {acc*100:.0f}%):\n"
+                    "- The student has an active knowledge gap in this concept. Provide a step-by-step foundational breakdown.\n"
+                    "- Use an intuitive, concrete analogy to clarify the core mechanism before technical details.\n"
+                    "- Emphasize basic definitions and common pitfalls to reinforce retention.\n"
+                )
+            elif tier == "advanced":
+                pedagogical_mode = "advanced"
+                pedagogical_instructions = (
+                    f"\nPEDAGOGICAL ADAPTATION (Learner has mastered '{topic}' | Diagnostic Mastery: {acc*100:.0f}%):\n"
+                    "- The student exhibits high proficiency. Provide a concise, mathematically rigorous explanation.\n"
+                    "- Deep-dive into edge cases, subtle constraints, and algorithmic trade-offs.\n"
+                )
+
         system_prompt = (
             "You are LearnLens AI, an academic personalized learning assistant. "
             "Your task is to answer the student's question accurately and faithfully "
@@ -108,6 +132,7 @@ class RAGService:
             "3. Cite the exact page number(s) (e.g., [Page X]) whenever explaining concepts.\n"
             "4. Address every part of the student's question completely (e.g., both time complexity and space requirements if asked).\n"
             "5. Keep explanations educational, structured, and easy to understand."
+            f"{pedagogical_instructions}"
         )
 
         user_prompt = (
@@ -169,6 +194,7 @@ class RAGService:
             "retrieval_method": retrieval_method,
             "chunks_used": len(retrieved_chunks),
             "model_used": model_used,
+            "pedagogical_mode": pedagogical_mode,
         }
 
     def _extractive_fallback_answer(self, question: str, chunks: List[Dict[str, Any]]) -> str:

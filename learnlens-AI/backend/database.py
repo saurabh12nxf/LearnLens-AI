@@ -89,6 +89,12 @@ class User(Base):
         cascade="all, delete-orphan",
         order_by="StudyPlan.id.desc()",
     )
+    chat_history = relationship(
+        "ChatInteraction",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="ChatInteraction.created_at.desc()",
+    )
 
 
 # ============================================================================
@@ -276,6 +282,38 @@ class StudyPlan(Base):
     # Relationships
     user = relationship("User", back_populates="study_plans")
     resource = relationship("LearningResource", back_populates="study_plans")
+
+
+# ============================================================================
+# Phase 5: Learning Interaction & Persistent Chat History (FR-05)
+# ============================================================================
+
+class ChatInteraction(Base):
+    __tablename__ = "chat_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    resource_id = Column(
+        Integer,
+        ForeignKey("learning_resources.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    citations = Column(JSON, nullable=True)
+    model_used = Column(String(100), nullable=True)
+    pedagogical_mode = Column(String(50), default="standard")  # foundational | standard | advanced
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="chat_history")
+    resource = relationship("LearningResource")
 
 
 def init_db():
